@@ -1,3 +1,8 @@
+
+mod hi_rez_constants;
+mod url_builder;
+
+
 #[cfg(test)]
 mod tests {
     #[test]
