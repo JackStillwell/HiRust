@@ -28,7 +28,7 @@ fn get_timestamp() -> String {
     return timestamp;
 }
 
-fn build_ping(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
+fn ping_url(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
     return format!("{}/{}{}",
         base_url.val(),
         "ping",
@@ -36,7 +36,31 @@ fn build_ping(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
     );
 }
 
-fn build_url(
+fn session_url(
+    base_url: &UrlConstants,
+    data_type: &ReturnDataType,
+    id: &String,
+    key: &String,
+) -> String {
+    let method_name = UrlConstants::CreateSession;
+    let timestamp: String = get_timestamp();
+    let signature: String = build_signature(
+        id,
+        &method_name,
+        key,
+        &timestamp,
+    );
+    return format!("{}/{}{}/{}/{}/{}",
+        base_url.val(),
+        method_name.val(),
+        data_type.val(),
+        id,
+        signature,
+        timestamp,
+    );
+}
+
+fn url(
     id: &String,
     key: &String,
     session: &String,
@@ -52,7 +76,7 @@ fn build_url(
         key,
         &timestamp,
     );
-    return format!("{}/{}{}/{}/{}/{}/{}/{}",
+    return format!("{}/{}{}/{}/{}/{}/{}{}",
         base_url.val(),
         method_name.val(),
         data_type.val(),
