@@ -1,4 +1,4 @@
-use chrono::{Datelike, Duration, Timelike, Utc};
+use chrono::{Datelike, Timelike, Utc};
 use crypto::{digest::Digest, md5::Md5};
 
 use crate::hi_rez_constants::{
@@ -28,10 +28,19 @@ fn get_timestamp() -> String {
     return timestamp;
 }
 
+fn build_ping(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
+    return format!("{}/{}{}",
+        base_url.val(),
+        "ping",
+        data_type.val(),
+    );
+}
+
 fn build_url(
     id: &String,
     key: &String,
     session: &String,
+    base_url: &UrlConstants,
     method_name: &UrlConstants,
     data_type: &ReturnDataType,
     method_specific: &String,
@@ -44,7 +53,7 @@ fn build_url(
         &timestamp,
     );
     return format!("{}/{}{}/{}/{}/{}/{}/{}",
-        UrlConstants::UrlBase.val(),
+        base_url.val(),
         method_name.val(),
         data_type.val(),
         id,

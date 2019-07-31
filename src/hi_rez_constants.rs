@@ -1,7 +1,6 @@
 
 pub enum UrlConstants {
     UrlBase,
-    Ping,
     DataLimitCheck,
     CreateSession,
     GetMatchDetails,
@@ -15,7 +14,6 @@ impl UrlConstants {
     pub fn val(&self) -> String {
         match *self {
             UrlConstants::UrlBase => String::from("http://api.smitegame.com/smiteapi.svc"),
-            UrlConstants::Ping => String::from("ping"),
             UrlConstants::DataLimitCheck => String::from("getdataused"),
             UrlConstants::CreateSession => String::from("createsession"),
             UrlConstants::GetMatchDetails => String::from("getmatchdetails"),
