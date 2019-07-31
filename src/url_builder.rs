@@ -28,7 +28,7 @@ fn get_timestamp() -> String {
     return timestamp;
 }
 
-fn ping_url(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
+pub fn ping_url(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
     return format!("{}/{}{}",
         base_url.val(),
         "ping",
