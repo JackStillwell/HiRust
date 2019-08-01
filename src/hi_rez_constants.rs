@@ -50,3 +50,22 @@ impl DataConstants {
         }
     }
 }
+
+pub enum LimitConstants {
+    ConcurrentSessions,
+    SessionsPerDay,
+    // the time limit in seconds
+    SessionTimeLimit,
+    RequestsPerDay,
+}
+
+impl LimitConstants {
+    pub fn val(&self) -> u16 {
+        match *self {
+            LimitConstants::ConcurrentSessions => 50,
+            LimitConstants::SessionsPerDay => 500,
+            LimitConstants::SessionTimeLimit => 900,
+            LimitConstants::RequestsPerDay => 7500,
+        }
+    }
+}
