@@ -7,7 +7,7 @@ use crate::hi_rez_constants::{
     DataConstants
 };
 
-fn build_signature(id: &String, method_name: &UrlConstants, key: &String, date: &String) -> String {
+fn build_signature(id: &str, method_name: &UrlConstants, key: &str, date: &str) -> String {
     let mut md5 = Md5::new();
     md5.input_str(&format!("{}{}{}{}", id, method_name.val(), key, date));
     return md5.result_str();
@@ -36,11 +36,11 @@ pub fn ping_url(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
     );
 }
 
-fn session_url(
+pub fn session_url(
     base_url: &UrlConstants,
     data_type: &ReturnDataType,
-    id: &String,
-    key: &String,
+    id: &str,
+    key: &str,
 ) -> String {
     let method_name = UrlConstants::CreateSession;
     let timestamp: String = get_timestamp();
