@@ -49,16 +49,27 @@ impl Session {
     }
 }
 
-pub struct SessionManager<'a> {
+pub struct SessionManager {
     idle_sessions: Vec<Session>,
     active_sessions: Vec<Session>,
     sessions_created: u16,
-    dev_id: &'a str,
-    dev_key: &'a str,
+    dev_id: String,
+    dev_key: String,
     base_url: UrlConstants,
 }
 
-impl SessionManager<'_> {
+impl SessionManager {
+    pub fn new(dev_id: String, dev_key: String, base_url: UrlConstants) -> SessionManager {
+        SessionManager {
+            idle_sessions: Vec::new(),
+            active_sessions: Vec::new(),
+            sessions_created: 0,
+            dev_id,
+            dev_key,
+            base_url,
+        }
+    }
+
     pub fn get_session(&mut self) -> Result<Session, &str> {
         match self.idle_sessions.pop() {
             Some(session) => Ok(session),
@@ -70,7 +81,7 @@ impl SessionManager<'_> {
         let url = url_builder::session_url(
             &self.base_url,
             &ReturnDataType::Json,
-            self.dev_id, self.dev_key);
+            &self.dev_id, &self.dev_key);
 
         let response_result = reqwest::get(&url);
 
@@ -106,14 +117,11 @@ mod tests {
     fn test_create_session() {
 
         let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let mut session_manager = SessionManager {
-            idle_sessions: Vec::new(),
-            active_sessions: Vec::new(),
-            sessions_created: 0,
-            dev_id: &auth.dev_id,
-            dev_key: &auth.dev_key,
-            base_url: UrlConstants::UrlBase,
-        };
+        let mut session_manager = SessionManager::new(
+            auth.dev_id,
+            auth.dev_key,
+            UrlConstants::UrlBase,
+        );
 
         session_manager.create_session();
 
