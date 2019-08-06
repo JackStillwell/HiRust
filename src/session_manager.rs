@@ -4,6 +4,7 @@ use serde_json;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use std::collections::VecDeque;
 
 use crate::hi_rez_constants::{
     LimitConstants,
@@ -50,8 +51,8 @@ impl Session {
 }
 
 pub struct SessionManager {
-    idle_sessions: Vec<Session>,
-    active_sessions: Vec<Session>,
+    idle_sessions: VecDeque<Session>,
+    active_sessions: VecDeque<Session>,
     sessions_created: u16,
     dev_id: String,
     dev_key: String,
@@ -61,8 +62,8 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn new(dev_id: String, dev_key: String, base_url: UrlConstants) -> SessionManager {
         SessionManager {
-            idle_sessions: Vec::new(),
-            active_sessions: Vec::new(),
+            idle_sessions: VecDeque::new(),
+            active_sessions: VecDeque::new(),
             sessions_created: 0,
             dev_id,
             dev_key,
@@ -71,7 +72,7 @@ impl SessionManager {
     }
 
     pub fn get_session(&mut self) -> Result<Session, &str> {
-        match self.idle_sessions.pop() {
+        match self.idle_sessions.pop_front() {
             Some(session) => Ok(session),
             None => Err("No sessions available")
         }
@@ -105,7 +106,7 @@ impl SessionManager {
             creation_timestamp: Utc::now().timestamp(),
         };
 
-        self.idle_sessions.push(new_session);
+        self.idle_sessions.push_back(new_session);
         self.sessions_created += 1;
     }
 }
