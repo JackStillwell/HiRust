@@ -2,6 +2,7 @@
 pub mod hi_rez_constants;
 pub mod url_builder;
 pub mod session_manager;
+pub mod models;
 
 
 #[cfg(test)]

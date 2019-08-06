@@ -1,11 +1,41 @@
 use chrono::Utc;
 use reqwest;
+use serde_json;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
 
 use crate::hi_rez_constants::{
     LimitConstants,
     UrlConstants,
     ReturnDataType};
 use crate::url_builder;
+use crate::models::CreateSessionReply;
+
+pub struct Auth {
+    dev_id: String,
+    dev_key: String,
+}
+
+impl Auth {
+    pub fn from_file(path: &str) -> Auth {
+        // open the file specified by cli input
+        let path = Path::new(&path);
+        let mut file = File::open(&path).unwrap();
+
+        // read the contents of the file to a string
+        let mut s = String::new();
+        file.read_to_string(&mut s).unwrap();
+
+        // split the file by line, stripping \n
+        let s: Vec<&str> = s.split("\n").collect();
+
+        Auth {
+            dev_id: String::from(s[0]),
+            dev_key: String::from(s[1]),
+        }
+    }
+}
 
 pub struct Session {
     session_key: String,
@@ -44,9 +74,50 @@ impl SessionManager<'_> {
 
         let response_result = reqwest::get(&url);
 
-        match response_result {
-            Ok(mut response) => response.text(),
-            Err(response) => panic!("not implemented")
+        let mut response = match response_result {
+            Ok(response) => response,
+            Err(_) => panic!("Error Creating Session"),
         };
+
+        let response_text: String = match response.text() {
+            Ok(text) => text,
+            Err(_) => panic!("Error decoding create session reply"),
+        };
+
+        let json: CreateSessionReply = match serde_json::from_str(&response_text.clone()) {
+            Ok(json) => json,
+            Err(_) => panic!("Error deserializing create session reply"),
+        };
+
+        let new_session = Session{
+            session_key: json.session_id,
+            creation_timestamp: Utc::now().timestamp(),
+        };
+
+        self.idle_sessions.push(new_session);
+        self.sessions_created += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_create_session() {
+
+        let auth = Auth::from_file("../hirez-dev-credentials.txt");
+        let mut session_manager = SessionManager {
+            idle_sessions: Vec::new(),
+            active_sessions: Vec::new(),
+            sessions_created: 0,
+            dev_id: &auth.dev_id,
+            dev_key: &auth.dev_key,
+            base_url: UrlConstants::UrlBase,
+        };
+
+        session_manager.create_session();
+
+        assert_eq!(session_manager.sessions_created, 1);
+        assert_eq!(session_manager.idle_sessions.len(), 1);
     }
 }
