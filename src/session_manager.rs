@@ -5,6 +5,7 @@ use std::collections::VecDeque;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use std::convert::TryInto;
 
 use crate::hi_rez_constants::{LimitConstants, ReturnDataType, UrlConstants};
 use crate::models::CreateSessionReply;
@@ -35,6 +36,7 @@ impl Auth {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct Session {
     session_key: String,
     creation_timestamp: i64,
@@ -49,7 +51,7 @@ impl Session {
 
 pub struct SessionManager {
     idle_sessions: VecDeque<Session>,
-    active_sessions: VecDeque<Session>,
+    active_sessions: Vec<Session>,
     sessions_created: u16,
     dev_id: String,
     dev_key: String,
@@ -60,7 +62,7 @@ impl SessionManager {
     pub fn new(dev_id: String, dev_key: String, base_url: UrlConstants) -> SessionManager {
         SessionManager {
             idle_sessions: VecDeque::new(),
-            active_sessions: VecDeque::new(),
+            active_sessions: Vec::new(),
             sessions_created: 0,
             dev_id,
             dev_key,
@@ -68,14 +70,36 @@ impl SessionManager {
         }
     }
 
-    pub fn get_session(&mut self) -> Result<Session, &str> {
+    /*
+     * Retrieves the first valid session, creating if possible and discarding any invalid sessions
+     */
+    pub fn get_session(&mut self) -> Option<String> {
+        let num_sessions: usize = self.idle_sessions.len() + self.active_sessions.len();
+        let num_sessions: u16 = num_sessions.try_into().unwrap();
         match self.idle_sessions.pop_front() {
-            Some(session) => Ok(session),
-            None => Err("No sessions available"),
+            Some(session) => match session.is_valid() {
+                true => Some(session.session_key),
+                false => self.get_session(),
+            },
+            None => match self.sessions_created < LimitConstants::SessionsPerDay.val() {
+                true => match num_sessions < LimitConstants::ConcurrentSessions.val() {
+                    true => Some(self.create_session()),
+                    false => None,
+                },
+                false => None,
+            },
         }
     }
 
-    fn create_session(&mut self) {
+    pub fn replace_session(&mut self, session_key: String) {
+        let active_session_clone = self.active_sessions.clone();
+        let mut active_iterator = active_session_clone.iter();
+        let index = active_iterator.position(|x| x.session_key == session_key).unwrap();
+        self.idle_sessions.push_back(self.active_sessions[index].clone());
+        self.active_sessions.remove(index);
+    }
+
+    fn create_session(&mut self) -> String {
         let url = url_builder::session_url(
             &self.base_url,
             &ReturnDataType::Json,
@@ -105,8 +129,10 @@ impl SessionManager {
             creation_timestamp: Utc::now().timestamp(),
         };
 
-        self.idle_sessions.push_back(new_session);
+        self.active_sessions.push(new_session);
         self.sessions_created += 1;
+
+        new_session.session_key
     }
 }
 
