@@ -1,17 +1,14 @@
 use chrono::Utc;
 use reqwest;
 use serde_json;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::collections::VecDeque;
 
-use crate::hi_rez_constants::{
-    LimitConstants,
-    UrlConstants,
-    ReturnDataType};
-use crate::url_builder;
+use crate::hi_rez_constants::{LimitConstants, ReturnDataType, UrlConstants};
 use crate::models::CreateSessionReply;
+use crate::url_builder;
 
 pub struct Auth {
     dev_id: String,
@@ -74,7 +71,7 @@ impl SessionManager {
     pub fn get_session(&mut self) -> Result<Session, &str> {
         match self.idle_sessions.pop_front() {
             Some(session) => Ok(session),
-            None => Err("No sessions available")
+            None => Err("No sessions available"),
         }
     }
 
@@ -82,7 +79,9 @@ impl SessionManager {
         let url = url_builder::session_url(
             &self.base_url,
             &ReturnDataType::Json,
-            &self.dev_id, &self.dev_key);
+            &self.dev_id,
+            &self.dev_key,
+        );
 
         let response_result = reqwest::get(&url);
 
@@ -101,7 +100,7 @@ impl SessionManager {
             Err(_) => panic!("Error deserializing create session reply"),
         };
 
-        let new_session = Session{
+        let new_session = Session {
             session_key: json.session_id,
             creation_timestamp: Utc::now().timestamp(),
         };
@@ -116,13 +115,9 @@ mod tests {
     use super::*;
     #[test]
     fn test_create_session() {
-
         let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let mut session_manager = SessionManager::new(
-            auth.dev_id,
-            auth.dev_key,
-            UrlConstants::UrlBase,
-        );
+        let mut session_manager =
+            SessionManager::new(auth.dev_id, auth.dev_key, UrlConstants::UrlBase);
 
         session_manager.create_session();
 

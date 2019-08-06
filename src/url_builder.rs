@@ -1,11 +1,7 @@
 use chrono::{Datelike, Timelike, Utc};
 use crypto::{digest::Digest, md5::Md5};
 
-use crate::hi_rez_constants::{
-    UrlConstants,
-    ReturnDataType,
-    DataConstants
-};
+use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
 
 fn build_signature(id: &str, method_name: &UrlConstants, key: &str, date: &str) -> String {
     let mut md5 = Md5::new();
@@ -29,11 +25,7 @@ fn get_timestamp() -> String {
 }
 
 pub fn ping_url(base_url: &UrlConstants, data_type: &ReturnDataType) -> String {
-    return format!("{}/{}{}",
-        base_url.val(),
-        "ping",
-        data_type.val(),
-    );
+    return format!("{}/{}{}", base_url.val(), "ping", data_type.val(),);
 }
 
 pub fn session_url(
@@ -44,13 +36,9 @@ pub fn session_url(
 ) -> String {
     let method_name = UrlConstants::CreateSession;
     let timestamp: String = get_timestamp();
-    let signature: String = build_signature(
-        id,
-        &method_name,
-        key,
-        &timestamp,
-    );
-    return format!("{}/{}{}/{}/{}/{}",
+    let signature: String = build_signature(id, &method_name, key, &timestamp);
+    return format!(
+        "{}/{}{}/{}/{}/{}",
         base_url.val(),
         method_name.val(),
         data_type.val(),
@@ -70,13 +58,9 @@ fn url(
     method_specific: &String,
 ) -> String {
     let timestamp: String = get_timestamp();
-    let signature: String = build_signature(
-        id,
-        method_name,
-        key,
-        &timestamp,
-    );
-    return format!("{}/{}{}/{}/{}/{}/{}{}",
+    let signature: String = build_signature(id, method_name, key, &timestamp);
+    return format!(
+        "{}/{}{}/{}/{}/{}/{}{}",
         base_url.val(),
         method_name.val(),
         data_type.val(),
