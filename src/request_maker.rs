@@ -81,11 +81,14 @@ impl RequestMaker {
 
         let json: GetMatchIdsByQueueReply = match serde_json::from_str(&response_text.clone()) {
             Ok(json) => json,
-            Err(_) => panic!("Error deserializing create session reply"),
+            Err(_) => panic!("Error deserializing get match ids by queue reply"),
         };
 
         if json.ret_msg != "Approved" {
-            panic!(format!("CreateSession Request Error: {}", json.ret_msg));
+            panic!(format!(
+                "GetMatchIdsByQueueReply Request Error: {}",
+                json.ret_msg
+            ));
         }
 
         json
