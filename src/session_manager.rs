@@ -152,12 +152,12 @@ impl SessionManager {
 
         let mut response = match response_result {
             Ok(response) => response,
-            Err(_) => panic!("Error Creating Session"),
+            Err(_) => panic!("Error reqwesting session"),
         };
 
         let response_text: String = match response.text() {
             Ok(text) => text,
-            Err(_) => panic!("Error decoding create session reply"),
+            Err(_) => panic!("Error decoding response"),
         };
 
         let json: CreateSessionReply = match serde_json::from_str(&response_text.clone()) {
