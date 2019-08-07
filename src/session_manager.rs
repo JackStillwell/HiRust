@@ -1,11 +1,15 @@
 use chrono::Utc;
+use rand::{thread_rng, Rng};
 use reqwest;
 use serde_json;
 use std::collections::VecDeque;
+use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
-use std::convert::TryInto;
+use std::sync::Mutex;
+use std::thread::sleep;
+use std::time::Duration;
 
 use crate::hi_rez_constants::{LimitConstants, ReturnDataType, UrlConstants};
 use crate::models::CreateSessionReply;
@@ -36,7 +40,7 @@ impl Auth {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Session {
     session_key: String,
     creation_timestamp: i64,
@@ -50,9 +54,10 @@ impl Session {
 }
 
 pub struct SessionManager {
-    idle_sessions: VecDeque<Session>,
-    active_sessions: Vec<Session>,
-    sessions_created: u16,
+    idle_sessions: Mutex<VecDeque<Session>>,
+    active_sessions: Mutex<Vec<Session>>,
+    sessions_created: Mutex<u16>,
+    valid_session_count: Mutex<u8>,
     dev_id: String,
     dev_key: String,
     base_url: UrlConstants,
@@ -61,9 +66,10 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn new(dev_id: String, dev_key: String, base_url: UrlConstants) -> SessionManager {
         SessionManager {
-            idle_sessions: VecDeque::new(),
-            active_sessions: Vec::new(),
-            sessions_created: 0,
+            idle_sessions: Mutex::new(VecDeque::new()),
+            active_sessions: Mutex::new(Vec::new()),
+            sessions_created: Mutex::new(0),
+            valid_session_count: Mutex::new(0),
             dev_id,
             dev_key,
             base_url,
@@ -74,32 +80,70 @@ impl SessionManager {
      * Retrieves the first valid session, creating if possible and discarding any invalid sessions
      */
     pub fn get_session(&mut self) -> Option<String> {
-        let num_sessions: usize = self.idle_sessions.len() + self.active_sessions.len();
-        let num_sessions: u16 = num_sessions.try_into().unwrap();
-        match self.idle_sessions.pop_front() {
-            Some(session) => match session.is_valid() {
-                true => Some(session.session_key),
-                false => self.get_session(),
-            },
-            None => match self.sessions_created < LimitConstants::SessionsPerDay.val() {
-                true => match num_sessions < LimitConstants::ConcurrentSessions.val() {
-                    true => Some(self.create_session()),
-                    false => None,
-                },
+        let mut valid_session_count = self.valid_session_count.lock().unwrap();
+        let num_sessions: u16 = (*self.valid_session_count.lock().unwrap())
+            .try_into()
+            .unwrap();
+        let mut sessions_created = self.sessions_created.lock().unwrap();
+        let mut idle_sessions = self.idle_sessions.lock().unwrap();
+        let mut active_sessions = self.active_sessions.lock().unwrap();
+
+        // check every session in idle_sessions and if valid, return
+        //   if not valid, discard and look for the next one
+        while let Some(session) = idle_sessions.pop_front() {
+            match session.is_valid() {
+                true => {
+                    let key = session.session_key.clone();
+                    active_sessions.push(session);
+                    return Some(key);
+                }
+                false => {
+                    *valid_session_count -= 1;
+                }
+            }
+        }
+
+        // if there are no sessions in idle_sessions
+        match *sessions_created < LimitConstants::SessionsPerDay.val() {
+            true => match num_sessions < LimitConstants::ConcurrentSessions.val() {
+                true => {
+                    let new_session = self.create_session();
+                    let key = new_session.session_key.clone();
+                    active_sessions.push(new_session);
+                    *valid_session_count += 1;
+                    *sessions_created += 1;
+                    Some(key)
+                }
                 false => None,
             },
+            false => None,
+        }
+    }
+
+    pub fn get_session_concurrent(&mut self) -> String {
+        loop {
+            let mut rng = thread_rng();
+            match self.get_session() {
+                Some(key) => return key,
+                // sleep for one second and between 0 and 5 nanoseconds
+                None => sleep(Duration::new(1, rng.gen_range(0, 5))),
+            };
         }
     }
 
     pub fn replace_session(&mut self, session_key: String) {
-        let active_session_clone = self.active_sessions.clone();
+        let mut active_sessions = self.active_sessions.lock().unwrap();
+        let mut idle_sessions = self.idle_sessions.lock().unwrap();
+        let active_session_clone = active_sessions.clone();
         let mut active_iterator = active_session_clone.iter();
-        let index = active_iterator.position(|x| x.session_key == session_key).unwrap();
-        self.idle_sessions.push_back(self.active_sessions[index].clone());
-        self.active_sessions.remove(index);
+        let index = active_iterator
+            .position(|x| x.session_key == session_key)
+            .unwrap();
+        idle_sessions.push_back(active_sessions[index].clone());
+        active_sessions.remove(index);
     }
 
-    fn create_session(&mut self) -> String {
+    fn create_session(&self) -> Session {
         let url = url_builder::session_url(
             &self.base_url,
             &ReturnDataType::Json,
@@ -124,15 +168,14 @@ impl SessionManager {
             Err(_) => panic!("Error deserializing create session reply"),
         };
 
-        let new_session = Session {
+        if json.ret_msg != "Approved" {
+            panic!(format!("CreateSession Request Error: {}", json.ret_msg));
+        }
+
+        Session {
             session_key: json.session_id,
             creation_timestamp: Utc::now().timestamp(),
-        };
-
-        self.active_sessions.push(new_session);
-        self.sessions_created += 1;
-
-        new_session.session_key
+        }
     }
 }
 
@@ -147,7 +190,7 @@ mod tests {
 
         session_manager.create_session();
 
-        assert_eq!(session_manager.sessions_created, 1);
-        assert_eq!(session_manager.idle_sessions.len(), 1);
+        assert_eq!(*session_manager.sessions_created.lock().unwrap(), 1);
+        assert_eq!(session_manager.active_sessions.lock().unwrap().len(), 1);
     }
 }
