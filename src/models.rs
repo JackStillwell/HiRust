@@ -6,3 +6,8 @@ pub struct CreateSessionReply {
     pub session_id: String,
     pub timestamp: String,
 }
+
+#[derive(Deserialize)]
+pub struct GetMatchIdsByQueueReply {
+    pub ret_msg: String,
+}

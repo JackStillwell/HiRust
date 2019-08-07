@@ -1,7 +1,7 @@
 use chrono::{Datelike, Timelike, Utc};
 use crypto::{digest::Digest, md5::Md5};
 
-use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
+use crate::hi_rez_constants::{ReturnDataType, UrlConstants};
 
 fn build_signature(id: &str, method_name: &UrlConstants, key: &str, date: &str) -> String {
     let mut md5 = Md5::new();
@@ -48,7 +48,7 @@ pub fn session_url(
     );
 }
 
-fn url(
+pub fn url(
     id: &String,
     key: &String,
     session: &String,
