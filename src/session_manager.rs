@@ -132,9 +132,8 @@ impl SessionManager {
     pub fn replace_session(&mut self, session_key: String) {
         let mut active_sessions = self.active_sessions.lock().unwrap();
         let mut idle_sessions = self.idle_sessions.lock().unwrap();
-        let active_session_clone = active_sessions.clone();
-        let mut active_iterator = active_session_clone.iter();
-        let index = active_iterator
+        let index = active_sessions
+            .iter()
             .position(|x| x.session_key == session_key)
             .unwrap();
         idle_sessions.push_back(active_sessions[index].clone());
