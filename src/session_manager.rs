@@ -79,11 +79,9 @@ impl SessionManager {
     /*
      * Retrieves the first valid session, creating if possible and discarding any invalid sessions
      */
-    pub fn get_session(&mut self) -> Option<String> {
+    pub fn get_session_key(&mut self) -> Option<String> {
         let mut valid_session_count = self.valid_session_count.lock().unwrap();
-        let num_sessions: u16 = (*self.valid_session_count.lock().unwrap())
-            .try_into()
-            .unwrap();
+        let num_sessions: u16 = (*valid_session_count).try_into().unwrap();
         let mut sessions_created = self.sessions_created.lock().unwrap();
         let mut idle_sessions = self.idle_sessions.lock().unwrap();
         let mut active_sessions = self.active_sessions.lock().unwrap();
@@ -120,10 +118,10 @@ impl SessionManager {
         }
     }
 
-    pub fn get_session_concurrent(&mut self) -> String {
+    pub fn get_session_key_concurrent(&mut self) -> String {
         loop {
             let mut rng = thread_rng();
-            match self.get_session() {
+            match self.get_session_key() {
                 Some(key) => return key,
                 // sleep for one second and between 0 and 5 nanoseconds
                 None => sleep(Duration::new(1, rng.gen_range(0, 5))),
@@ -183,9 +181,53 @@ impl SessionManager {
 mod tests {
     use super::*;
     #[test]
-    fn test_create_session() {
+    fn test_get_replace_session() {
         let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let session_manager = SessionManager::new(auth.dev_id, auth.dev_key, UrlConstants::UrlBase);
-        session_manager.create_session();
+        let mut session_manager = SessionManager::new(auth.dev_id, auth.dev_key, UrlConstants::UrlBase);
+
+        assert!({*session_manager.sessions_created.lock().unwrap() == 0});
+        assert!({*session_manager.valid_session_count.lock().unwrap() == 0});
+        assert!({session_manager.active_sessions.lock().unwrap().len() == 0});
+        assert!({session_manager.idle_sessions.lock().unwrap().len() == 0});
+
+        let key = session_manager.get_session_key().unwrap();
+        assert!(key != "");
+
+        assert!({*session_manager.sessions_created.lock().unwrap() == 1});
+        assert!({*session_manager.valid_session_count.lock().unwrap() == 1});
+        assert!({session_manager.active_sessions.lock().unwrap().len() == 1});
+        assert!({session_manager.idle_sessions.lock().unwrap().len() == 0});
+
+        let first_key = key.clone();
+        session_manager.replace_session(key);
+
+        assert!({*session_manager.sessions_created.lock().unwrap() == 1});
+        assert!({*session_manager.valid_session_count.lock().unwrap() == 1});
+        assert!({session_manager.active_sessions.lock().unwrap().len() == 0});
+        assert!({session_manager.idle_sessions.lock().unwrap().len() == 1});
+
+        let first_key_again = session_manager.get_session_key().unwrap();
+        assert_eq!(first_key, first_key_again);
+
+        assert!({*session_manager.sessions_created.lock().unwrap() == 1});
+        assert!({*session_manager.valid_session_count.lock().unwrap() == 1});
+        assert!({session_manager.active_sessions.lock().unwrap().len() == 1});
+        assert!({session_manager.idle_sessions.lock().unwrap().len() == 0});
+
+        let second_key = session_manager.get_session_key().unwrap();
+        assert!("" != second_key);
+        assert!(first_key != second_key);
+
+        assert!({*session_manager.sessions_created.lock().unwrap() == 2});
+        assert!({*session_manager.valid_session_count.lock().unwrap() == 2});
+        assert!({session_manager.active_sessions.lock().unwrap().len() == 2});
+        assert!({session_manager.idle_sessions.lock().unwrap().len() == 0});
+
+        session_manager.replace_session(second_key);
+
+        assert!({*session_manager.sessions_created.lock().unwrap() == 2});
+        assert!({*session_manager.valid_session_count.lock().unwrap() == 2});
+        assert!({session_manager.active_sessions.lock().unwrap().len() == 1});
+        assert!({session_manager.idle_sessions.lock().unwrap().len() == 1});
     }
 }
