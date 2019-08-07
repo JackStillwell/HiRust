@@ -185,12 +185,7 @@ mod tests {
     #[test]
     fn test_create_session() {
         let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let mut session_manager =
-            SessionManager::new(auth.dev_id, auth.dev_key, UrlConstants::UrlBase);
-
+        let session_manager = SessionManager::new(auth.dev_id, auth.dev_key, UrlConstants::UrlBase);
         session_manager.create_session();
-
-        assert_eq!(*session_manager.sessions_created.lock().unwrap(), 1);
-        assert_eq!(session_manager.active_sessions.lock().unwrap().len(), 1);
     }
 }
