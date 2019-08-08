@@ -17,7 +17,7 @@ impl UrlConstants {
             UrlConstants::CreateSession => String::from("createsession"),
             UrlConstants::GetMatchDetails => String::from("getmatchdetails"),
             UrlConstants::GetMatchDetailsBatch => String::from("getmatchdetailsbatch"),
-            UrlConstants::GetMatchIdsByQueue => String::from("getmatchdetailsbatch"),
+            UrlConstants::GetMatchIdsByQueue => String::from("getmatchidsbyqueue"),
             UrlConstants::GetGods => String::from("getgods"),
             UrlConstants::GetItems => String::from("getitems"),
         }

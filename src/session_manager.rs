@@ -1,6 +1,5 @@
 use chrono::Utc;
 use rand::{thread_rng, Rng};
-use reqwest;
 use serde_json;
 use std::collections::VecDeque;
 use std::convert::TryInto;
@@ -13,8 +12,8 @@ use std::time::Duration;
 
 use crate::hi_rez_constants::{LimitConstants, ReturnDataType, UrlConstants};
 use crate::models::CreateSessionReply;
-use crate::url_builder;
 use crate::request_maker;
+use crate::url_builder;
 
 pub struct Auth {
     pub dev_id: String,
@@ -60,7 +59,7 @@ pub struct SessionManager {
     sessions_created: Mutex<u16>,
     valid_session_count: Mutex<u8>,
     pub credentials: Auth,
-    base_url: UrlConstants,
+    pub base_url: UrlConstants,
 }
 
 impl SessionManager {
@@ -159,17 +158,26 @@ impl SessionManager {
 
         let response_text: String = request_maker::reqwest_to_text(url);
 
-        let json: CreateSessionReply = match serde_json::from_str(&response_text.clone()) {
+        let reply: CreateSessionReply = match serde_json::from_str(&response_text.clone()) {
             Ok(json) => json,
             Err(_) => panic!("Error deserializing create session reply"),
         };
 
-        if json.ret_msg != "Approved" {
-            panic!(format!("CreateSession Request Error: {}", json.ret_msg));
+        let approved_string = String::from("Approved");
+
+        match reply.ret_msg {
+            Some(approved_string) => {},
+            Some(msg) => panic!(format!("CreateSession Request Error: {}", msg)),
+            None => panic!("CreateSession Request Error: ret_msg was null"),
         }
 
+        let key = match reply.session_id {
+            Some(key) => key,
+            None => panic!("CreateSession Request Error: session_id was null")
+        };
+
         Session {
-            session_key: json.session_id,
+            session_key: key,
             creation_timestamp: Utc::now().timestamp(),
         }
     }

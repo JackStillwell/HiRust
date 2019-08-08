@@ -1,7 +1,7 @@
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{Date, Datelike, Utc};
 
 use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
-use crate::models::GetMatchIdsByQueueReply;
+use crate::models::{GetMatchIdsByQueueReply, PlayerMatchDetails};
 use crate::session_manager::SessionManager;
 use crate::url_builder;
 
@@ -11,7 +11,7 @@ const VALID_HOURS: [&str; 25] = [
 ];
 const VALID_MINUTES: [&str; 7] = ["", "00", "10", "20", "30", "40", "50"];
 
-fn format_date(date: DateTime<Utc>) -> String {
+fn format_date(date: Date<Utc>) -> String {
     format!("{}{:02}{:02}", date.year(), date.month(), date.day(),)
 }
 
@@ -31,17 +31,16 @@ pub fn reqwest_to_text(url: String) -> String {
 
 pub struct RequestMaker {
     session_manager: SessionManager,
-    base_url: UrlConstants,
 }
 
 impl RequestMaker {
     pub fn get_match_ids_by_queue(
         &mut self,
         queue_id: DataConstants,
-        date: DateTime<Utc>,
+        date: Date<Utc>,
         hour: String,
         minute: String,
-    ) -> GetMatchIdsByQueueReply {
+    ) -> Vec<String> {
         let mut time_window_to_retrieve: String;
 
         match VALID_HOURS.iter().find(|&&x| x == hour) {
@@ -66,7 +65,7 @@ impl RequestMaker {
             &self.session_manager.credentials.dev_id,
             &self.session_manager.credentials.dev_key,
             &session_key,
-            &self.base_url,
+            &self.session_manager.base_url,
             &UrlConstants::GetMatchIdsByQueue,
             &ReturnDataType::Json,
             &format!(
@@ -79,18 +78,82 @@ impl RequestMaker {
 
         let response_text: String = reqwest_to_text(url);
 
-        let json: GetMatchIdsByQueueReply = match serde_json::from_str(&response_text.clone()) {
-            Ok(json) => json,
-            Err(_) => panic!("Error deserializing get match ids by queue reply"),
+        let replies: Vec<GetMatchIdsByQueueReply> =
+            match serde_json::from_str(&response_text.clone()) {
+                Ok(json) => json,
+                Err(_) => panic!("Error deserializing get match ids by queue reply"),
+            };
+
+        match &replies[0].ret_msg {
+            Some(msg) => panic!(format!("GetMatchIdsByQueue Request Error: {}", msg)),
+            None => {}
         };
 
-        if json.ret_msg != "Approved" {
-            panic!(format!(
-                "GetMatchIdsByQueueReply Request Error: {}",
-                json.ret_msg
-            ));
-        }
+        replies
+            .into_iter()
+            .filter_map(|x| match x.Active_Flag {
+                Some('n') => x.Match,
+                _ => None,
+            })
+            .collect()
+    }
 
-        json
+    pub fn get_match_details(&mut self, match_id: String) -> Vec<PlayerMatchDetails> {
+        let session_key = self.session_manager.get_session_key().unwrap();
+        let url = url_builder::url(
+            &self.session_manager.credentials.dev_id,
+            &self.session_manager.credentials.dev_key,
+            &session_key,
+            &self.session_manager.base_url,
+            &UrlConstants::GetMatchDetails,
+            &ReturnDataType::Json,
+            &format!("/{}", match_id),
+        );
+
+        let response_text: String = reqwest_to_text(url);
+
+        let replies: Vec<PlayerMatchDetails> = match serde_json::from_str(&response_text.clone()) {
+            Ok(json) => json,
+            Err(msg) => panic!(format!("Error deserializing get match details reply: {}", msg)),
+        };
+
+        match &replies[0].ret_msg {
+            Some(msg) => panic!(format!("GetMatchDetails Request Error: {}", msg)),
+            None => {}
+        };
+
+        replies
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session_manager::Auth;
+    use chrono::TimeZone;
+
+    #[test]
+    fn test_get_match_ids_by_queue() {
+        let auth = Auth::from_file("../hirez-dev-credentials.txt");
+        let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
+        let mut request_maker = RequestMaker { session_manager };
+        let replies = request_maker.get_match_ids_by_queue(
+            DataConstants::RankedConquest,
+            Utc.ymd(2019, 8, 5),
+            String::from("0"),
+            String::from("00"),
+        );
+
+        assert_eq!(replies[0], String::from("956598608"));
+    }
+
+    #[test]
+    fn test_get_match_details() {
+        let auth = Auth::from_file("../hirez-dev-credentials.txt");
+        let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
+        let mut request_maker = RequestMaker { session_manager };
+        let replies = request_maker.get_match_details(String::from("956598608"));
+
+        assert_eq!(replies[0].playerId, Some(String::from("4203198")));
     }
 }
