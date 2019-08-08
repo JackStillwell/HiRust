@@ -77,7 +77,7 @@ impl SessionManager {
     /*
      * Retrieves the first valid session, creating if possible and discarding any invalid sessions
      */
-    pub fn get_session_key(&mut self) -> Option<String> {
+    pub fn get_session_key(&self) -> Option<String> {
         let mut valid_session_count = self.valid_session_count.lock().unwrap();
         let num_sessions: u16 = (*valid_session_count).try_into().unwrap();
         let mut sessions_created = self.sessions_created.lock().unwrap();
@@ -116,7 +116,7 @@ impl SessionManager {
         }
     }
 
-    pub fn get_session_key_concurrent(&mut self) -> String {
+    pub fn get_session_key_concurrent(&self) -> String {
         loop {
             let mut rng = thread_rng();
             match self.get_session_key() {
@@ -127,7 +127,7 @@ impl SessionManager {
         }
     }
 
-    pub fn replace_session(&mut self, session_key: String) {
+    pub fn replace_session(&self, session_key: String) {
         let mut active_sessions = self.active_sessions.lock().unwrap();
         let mut idle_sessions = self.idle_sessions.lock().unwrap();
         let index = active_sessions
@@ -138,7 +138,7 @@ impl SessionManager {
         active_sessions.remove(index);
     }
 
-    pub fn remove_invalid_session(&mut self, session_key: String) {
+    pub fn remove_invalid_session(&self, session_key: String) {
         let mut active_sessions = self.active_sessions.lock().unwrap();
         let index = active_sessions
             .iter()

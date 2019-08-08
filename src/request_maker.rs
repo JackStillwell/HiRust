@@ -1,4 +1,7 @@
 use chrono::{Date, Datelike, Utc};
+use std::sync::{Arc, Mutex};
+use std::cmp;
+use std::thread;
 
 use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
 use crate::models::{GetMatchIdsByQueueReply, PlayerMatchDetails};
@@ -13,6 +16,15 @@ const VALID_MINUTES: [&str; 7] = ["", "00", "10", "20", "30", "40", "50"];
 
 fn format_date(date: Date<Utc>) -> String {
     format!("{}{:02}{:02}", date.year(), date.month(), date.day(),)
+}
+
+fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
+    let mut ret_string = String::new();
+    for id in match_ids{
+        ret_string.push_str(&format!("/{}", id));
+    }
+
+    ret_string
 }
 
 pub fn reqwest_to_text(url: String) -> String {
@@ -116,6 +128,62 @@ impl RequestMaker {
             Ok(json) => json,
             Err(msg) => panic!(format!("Error deserializing get match details reply: {}", msg)),
         };
+
+        match &replies[0].ret_msg {
+            Some(msg) => panic!(format!("GetMatchDetails Request Error: {}", msg)),
+            None => {}
+        };
+
+        replies
+    }
+
+    pub fn get_match_details_batch(&self, match_ids: Vec<String>) -> Vec<PlayerMatchDetails> {
+        let session_manager = Arc::new(self.session_manager);
+        let num_urls_needed = (match_ids.len() / 10) + 2;
+
+        let mut id_strings = vec![];
+        for _ in 1..num_urls_needed {
+            let split_vector = match_ids.split_at(cmp::min(match_ids.len(), 10));
+            match_ids = Vec::from(split_vector.1);
+            id_strings.push(construct_batch_match_id_string(Vec::from(split_vector.0)));
+        }
+
+        let mut handles = vec![];
+        let responses = Arc::new(Mutex::new(Vec::new()));
+        for id_string in id_strings {
+            let session_manager = Arc::clone(&session_manager);
+            let responses = Arc::clone(&responses);
+            let handle = thread::spawn(move || {
+                let session_key = &(*session_manager.get_session_key_concurrent());
+                let url = url_builder::url(
+                    &session_manager.credentials.dev_id,
+                    &session_manager.credentials.dev_key,
+                    &String::from(session_key),
+                    &session_manager.base_url,
+                    &UrlConstants::GetMatchDetailsBatch,
+                    &ReturnDataType::Json,
+                    &id_string,
+                );
+
+                let response_text = reqwest_to_text(url);
+                responses.lock().unwrap().push(response_text);
+
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let mut replies: Vec<PlayerMatchDetails> = Vec::new();
+        for response in *responses.lock().unwrap() {
+            let mut reply: Vec<PlayerMatchDetails> = match serde_json::from_str(&response) {
+                Ok(json) => json,
+                Err(msg) => panic!(format!("Error deserializing get match details reply: {}", msg)),
+            };
+            replies.append(&mut reply);
+        }
 
         match &replies[0].ret_msg {
             Some(msg) => panic!(format!("GetMatchDetails Request Error: {}", msg)),
