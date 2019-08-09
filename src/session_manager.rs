@@ -142,7 +142,7 @@ impl SessionManager {
     }
 
     /*
-     * Retrieves the first valid session, creating if possible and discarding any invalid sessions
+     * Retrieves the first valid session, creating if necessary
      */
     pub fn get_session_key(&self) -> Option<String> {
         let mut active_sessions = self.active_sessions.lock().unwrap();
@@ -151,8 +151,11 @@ impl SessionManager {
         let num_sessions: u16 = (*valid_session_count).try_into().unwrap();
         let mut sessions_created = self.sessions_created.lock().unwrap();
         let mut num_requests = self.num_requests.lock().unwrap();
-        // check every session in idle_sessions and if valid, return
-        //   if not valid, discard and look for the next one
+
+        // reimplment the match some / none on pop
+        // TODO: remove my is_valid in favor of retrying
+        //         and trusting hirez (they're the source
+        //         of truth here)
         while let Some(session) = idle_sessions.pop_front() {
             match session.is_valid() {
                 true => {
