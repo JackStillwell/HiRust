@@ -1,6 +1,8 @@
 use chrono::{Date, Datelike, Utc};
-use std::sync::{Arc, Mutex};
 use std::cmp;
+use std::fs::File;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
@@ -19,11 +21,11 @@ fn format_date(date: Date<Utc>) -> String {
 }
 
 fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
-    let mut ret_string = String::new();
-    for id in match_ids{
-        ret_string.push_str(&format!("/{}", id));
+    let mut ret_string = String::from("/");
+    for id in match_ids {
+        ret_string.push_str(&format!("{},", id));
     }
-
+    ret_string.truncate(ret_string.len() - 1);
     ret_string
 }
 
@@ -42,7 +44,7 @@ pub fn reqwest_to_text(url: String) -> String {
 }
 
 pub struct RequestMaker {
-    session_manager: SessionManager,
+    session_manager: Arc<SessionManager>,
 }
 
 impl RequestMaker {
@@ -90,6 +92,8 @@ impl RequestMaker {
 
         let response_text: String = reqwest_to_text(url);
 
+        self.session_manager.replace_session(session_key);
+
         let replies: Vec<GetMatchIdsByQueueReply> =
             match serde_json::from_str(&response_text.clone()) {
                 Ok(json) => json,
@@ -124,9 +128,14 @@ impl RequestMaker {
 
         let response_text: String = reqwest_to_text(url);
 
+        self.session_manager.replace_session(session_key);
+
         let replies: Vec<PlayerMatchDetails> = match serde_json::from_str(&response_text.clone()) {
             Ok(json) => json,
-            Err(msg) => panic!(format!("Error deserializing get match details reply: {}", msg)),
+            Err(msg) => panic!(format!(
+                "Error deserializing get match details reply: {}",
+                msg
+            )),
         };
 
         match &replies[0].ret_msg {
@@ -137,28 +146,29 @@ impl RequestMaker {
         replies
     }
 
-    pub fn get_match_details_batch(&self, match_ids: Vec<String>) -> Vec<PlayerMatchDetails> {
-        let session_manager = Arc::new(self.session_manager);
-        let num_urls_needed = (match_ids.len() / 10) + 2;
+    pub fn get_match_details_batch(&self, mut match_ids: Vec<String>) -> Vec<PlayerMatchDetails> {
+        let match_ids_len: f32 = match_ids.len() as f32;
+        let num_urls_needed: f32 = match_ids_len / 10_f32;
+        let num_urls_needed: usize = num_urls_needed.ceil() as usize;
 
         let mut id_strings = vec![];
-        for _ in 1..num_urls_needed {
-            let split_vector = match_ids.split_at(cmp::min(match_ids.len(), 10));
-            match_ids = Vec::from(split_vector.1);
-            id_strings.push(construct_batch_match_id_string(Vec::from(split_vector.0)));
+        for _ in 0..num_urls_needed {
+            let limit = cmp::min(match_ids.len(), 10);
+            let ids = match_ids.drain(..limit).collect();
+            id_strings.push(construct_batch_match_id_string(ids));
         }
 
         let mut handles = vec![];
         let responses = Arc::new(Mutex::new(Vec::new()));
         for id_string in id_strings {
-            let session_manager = Arc::clone(&session_manager);
+            let session_manager = Arc::clone(&self.session_manager);
             let responses = Arc::clone(&responses);
             let handle = thread::spawn(move || {
-                let session_key = &(*session_manager.get_session_key_concurrent());
+                let session_key = session_manager.get_session_key_concurrent();
                 let url = url_builder::url(
                     &session_manager.credentials.dev_id,
                     &session_manager.credentials.dev_key,
-                    &String::from(session_key),
+                    &String::from(session_key.clone()),
                     &session_manager.base_url,
                     &UrlConstants::GetMatchDetailsBatch,
                     &ReturnDataType::Json,
@@ -167,7 +177,7 @@ impl RequestMaker {
 
                 let response_text = reqwest_to_text(url);
                 responses.lock().unwrap().push(response_text);
-
+                session_manager.replace_session(session_key);
             });
             handles.push(handle);
         }
@@ -176,11 +186,19 @@ impl RequestMaker {
             handle.join().unwrap();
         }
 
+        let responses = (*responses.lock().unwrap()).clone();
         let mut replies: Vec<PlayerMatchDetails> = Vec::new();
-        for response in *responses.lock().unwrap() {
+        for response in responses {
             let mut reply: Vec<PlayerMatchDetails> = match serde_json::from_str(&response) {
                 Ok(json) => json,
-                Err(msg) => panic!(format!("Error deserializing get match details reply: {}", msg)),
+                Err(msg) => {
+                    let mut file = File::create("debug_dump.json").unwrap();
+                    file.write_all(response.as_bytes()).unwrap();
+                    panic!(format!(
+                        "Error deserializing get match details batch reply: {}",
+                        msg
+                    ));
+                }
             };
             replies.append(&mut reply);
         }
@@ -200,28 +218,51 @@ mod tests {
     use crate::session_manager::Auth;
     use chrono::TimeZone;
 
+    // #[test]
+    // fn test_get_match_ids_by_queue() {
+    //     let auth = Auth::from_file("../hirez-dev-credentials.txt");
+    //     let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
+    //     let mut request_maker = RequestMaker {
+    //         session_manager: Arc::new(session_manager),
+    //     };
+    //     let replies = request_maker.get_match_ids_by_queue(
+    //         DataConstants::RankedConquest,
+    //         Utc.ymd(2019, 8, 5),
+    //         String::from("0"),
+    //         String::from("00"),
+    //     );
+
+    //     assert_eq!(replies[0], String::from("956598608"));
+    // }
+
+    // #[test]
+    // fn test_get_match_details() {
+    //     let auth = Auth::from_file("../hirez-dev-credentials.txt");
+    //     let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
+    //     let mut request_maker = RequestMaker {
+    //         session_manager: Arc::new(session_manager),
+    //     };
+    //     let replies = request_maker.get_match_details(String::from("956598608"));
+
+    //     assert_eq!(replies[0].playerId, Some(String::from("4203198")));
+    // }
+
     #[test]
-    fn test_get_match_ids_by_queue() {
+    fn test_get_match_details_batch() {
         let auth = Auth::from_file("../hirez-dev-credentials.txt");
         let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
-        let mut request_maker = RequestMaker { session_manager };
+        let mut request_maker = RequestMaker {
+            session_manager: Arc::new(session_manager),
+        };
         let replies = request_maker.get_match_ids_by_queue(
             DataConstants::RankedConquest,
             Utc.ymd(2019, 8, 5),
-            String::from("0"),
-            String::from("00"),
+            String::from("-1"),
+            String::from(""),
         );
 
-        assert_eq!(replies[0], String::from("956598608"));
-    }
+        let replies = request_maker.get_match_details_batch(replies);
 
-    #[test]
-    fn test_get_match_details() {
-        let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
-        let mut request_maker = RequestMaker { session_manager };
-        let replies = request_maker.get_match_details(String::from("956598608"));
-
-        assert_eq!(replies[0].playerId, Some(String::from("4203198")));
+        assert_eq!(replies.len(), 30880);
     }
 }

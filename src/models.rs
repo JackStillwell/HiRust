@@ -17,6 +17,14 @@ pub struct GetMatchIdsByQueueReply {
 
 #[allow(non_snake_case)]
 #[derive(Deserialize)]
+pub struct MergedPlayer {
+    pub merge_datetime: String,
+    pub playerId: String,
+    pub portalId: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Deserialize)]
 pub struct PlayerMatchDetails {
     pub Account_Level: Option<u8>,
     pub ActiveId1: Option<u16>,
@@ -112,7 +120,7 @@ pub struct PlayerMatchDetails {
     pub Mastery_Level: Option<u8>,
     pub Match: Option<u32>,
     pub Match_Duration: Option<u64>,
-    pub MergedPlayers: Option<String>,
+    pub MergedPlayers: Option<Vec<MergedPlayer>>,
     pub Minutes: Option<u8>,
     pub Multi_kill_Max: Option<u8>,
     pub Objective_Assists: Option<u8>,
@@ -133,7 +141,7 @@ pub struct PlayerMatchDetails {
     pub Team_Name: Option<String>,
     pub Time_In_Match_Seconds: Option<u16>,
     pub Towers_Destroyed: Option<u8>,
-    pub Wards_Placed: Option<u8>,
+    pub Wards_Placed: Option<u16>,
     pub Win_Status: Option<String>,
     pub Winning_TaskForce: Option<u8>,
     pub hasReplay: Option<char>,

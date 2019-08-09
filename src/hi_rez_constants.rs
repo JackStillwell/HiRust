@@ -61,7 +61,8 @@ pub enum LimitConstants {
 impl LimitConstants {
     pub fn val(&self) -> u16 {
         match *self {
-            LimitConstants::ConcurrentSessions => 50,
+            // this is set a little under the actual limit of 50 for safety
+            LimitConstants::ConcurrentSessions => 20,
             LimitConstants::SessionsPerDay => 500,
             LimitConstants::SessionTimeLimit => 900,
             LimitConstants::RequestsPerDay => 7500,
