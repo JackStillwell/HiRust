@@ -63,6 +63,9 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
+    // make new 'load' and 'store' functions to support persisting session awareness
+    //   across runs
+
     pub fn new(credentials: Auth, base_url: UrlConstants) -> SessionManager {
         SessionManager {
             idle_sessions: Mutex::new(VecDeque::new()),
