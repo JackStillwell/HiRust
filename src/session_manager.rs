@@ -60,6 +60,7 @@ pub struct SessionManager {
     active_sessions: Mutex<Vec<Session>>,
     sessions_created: Mutex<u16>,
     valid_session_count: Mutex<u8>,
+    num_requests: Mutex<u16>,
     pub credentials: Auth,
     pub base_url: UrlConstants,
 }
@@ -71,9 +72,6 @@ impl Drop for SessionManager {
 }
 
 impl SessionManager {
-    // make new 'load' and 'store' functions to support persisting session awareness
-    //   across runs
-
     pub fn store(&self) {
         let mut active_sessions = self.active_sessions.lock().unwrap();
         let mut idle_sessions = self.idle_sessions.lock().unwrap();
@@ -129,12 +127,15 @@ impl SessionManager {
                 let seconds_active = Utc::now().timestamp() - x.creation_timestamp;
                 seconds_active < SECONDS_IN_A_DAY
             })
-            .count().try_into().unwrap();
+            .count()
+            .try_into()
+            .unwrap();
         SessionManager {
             idle_sessions: Mutex::new(idle_sessions),
             active_sessions: Mutex::new(Vec::new()),
             sessions_created: Mutex::new(sessions_created),
             valid_session_count: Mutex::new(valid_session_count),
+            num_requests: Mutex::new(0),
             credentials,
             base_url,
         }
@@ -149,7 +150,7 @@ impl SessionManager {
         let mut valid_session_count = self.valid_session_count.lock().unwrap();
         let num_sessions: u16 = (*valid_session_count).try_into().unwrap();
         let mut sessions_created = self.sessions_created.lock().unwrap();
-
+        let mut num_requests = self.num_requests.lock().unwrap();
         // check every session in idle_sessions and if valid, return
         //   if not valid, discard and look for the next one
         while let Some(session) = idle_sessions.pop_front() {
@@ -157,6 +158,7 @@ impl SessionManager {
                 true => {
                     let key = session.session_key.clone();
                     active_sessions.push(session);
+                    *num_requests += 1;
                     return Some(key);
                 }
                 false => {
@@ -165,17 +167,21 @@ impl SessionManager {
             }
         }
 
-        // if there are no sessions in idle_sessions
+        // TODO: Implement this pattern better
         match *sessions_created < LimitConstants::SessionsPerDay.val() {
             true => match num_sessions < LimitConstants::ConcurrentSessions.val() {
-                true => {
-                    let new_session = self.create_session();
-                    let key = new_session.session_key.clone();
-                    active_sessions.push(new_session);
-                    *valid_session_count += 1;
-                    *sessions_created += 1;
-                    Some(key)
-                }
+                true => match *num_requests < LimitConstants::RequestsPerDay.val() {
+                    true => {
+                        let new_session = self.create_session();
+                        let key = new_session.session_key.clone();
+                        active_sessions.push(new_session);
+                        *valid_session_count += 1;
+                        *sessions_created += 1;
+                        *num_requests += 1;
+                        Some(key)
+                    }
+                    false => panic!("Maximum number of requests per day reached"),
+                },
                 false => None,
             },
             false => panic!("Maximum number of sessions per day reached"),
