@@ -15,6 +15,8 @@ use crate::models::CreateSessionReply;
 use crate::request_maker;
 use crate::url_builder;
 
+const SECONDS_IN_A_DAY: i64 = 86400;
+
 pub struct Auth {
     pub dev_id: String,
     pub dev_key: String,
@@ -119,12 +121,20 @@ impl SessionManager {
     }
 
     pub fn new(credentials: Auth, base_url: UrlConstants) -> SessionManager {
-        let idle_sessions = SessionManager::load();
+        let idle_sessions: VecDeque<Session> = SessionManager::load();
+        let valid_session_count: u8 = idle_sessions.len().try_into().unwrap();
+        let sessions_created: u16 = idle_sessions
+            .iter()
+            .filter(|x| {
+                let seconds_active = Utc::now().timestamp() - x.creation_timestamp;
+                seconds_active < SECONDS_IN_A_DAY
+            })
+            .count().try_into().unwrap();
         SessionManager {
             idle_sessions: Mutex::new(idle_sessions),
             active_sessions: Mutex::new(Vec::new()),
-            sessions_created: Mutex::new(0),
-            valid_session_count: Mutex::new(0),
+            sessions_created: Mutex::new(sessions_created),
+            valid_session_count: Mutex::new(valid_session_count),
             credentials,
             base_url,
         }

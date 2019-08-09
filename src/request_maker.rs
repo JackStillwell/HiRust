@@ -40,23 +40,21 @@ pub fn reqwest_to_text(url: String) -> String {
             Err(msg) => {
                 error_messages.push(format!("Error reqwesting url: {}", msg));
                 continue;
-            },
+            }
         };
 
         match response.text() {
             Ok(text) => {
                 ret_text = text;
                 break;
-            },
+            }
             Err(msg) => error_messages.push(format!("Error decoding response: {}", msg)),
         }
     }
 
     if error_messages.len() < 3 {
         ret_text
-    }
-
-    else {
+    } else {
         let mut error_string: String = String::new();
         for error in error_messages {
             let msg: String = format!(" {} |", error);
@@ -70,127 +68,88 @@ pub struct RequestMaker {
     session_manager: Arc<SessionManager>,
 }
 
+pub struct GetMatchIdsByQueueRequest {
+    queue_id: DataConstants,
+    date: Date<Utc>,
+    hour: String,
+    minute: String,
+}
+
 impl RequestMaker {
     pub fn get_match_ids_by_queue(
         &mut self,
-        queue_id: DataConstants,
-        date: Date<Utc>,
-        hour: String,
-        minute: String,
+        requests: Vec<GetMatchIdsByQueueRequest>,
     ) -> Vec<String> {
-        let mut time_window_to_retrieve: String;
+        let mut url_optionals: Vec<String> = Vec::new();
+        for request in requests {
+            let queue_id = request.queue_id;
+            let date = request.date;
+            let hour = request.hour;
+            let minute = request.minute;
 
-        match VALID_HOURS.iter().find(|&&x| x == hour) {
-            Some(_) => {}
-            None => panic!("Invalid hour specified"),
-        };
-        match VALID_MINUTES.iter().find(|&&x| x == minute) {
-            Some(_) => {}
-            None => panic!("Invalid minute specified"),
-        };
+            let mut time_window_to_retrieve: String;
 
-        if &hour == "-1" && &minute == "" {
-            time_window_to_retrieve = String::from("-1");
-        } else if &hour == "-1" && &minute != "" {
-            panic!("Invalid combination of hour and minute");
-        } else {
-            time_window_to_retrieve = format!("{},{}", hour, minute);
-        }
-
-        let mut response_text: String;
-
-        loop {
-            let session_key = self.session_manager.get_session_key().unwrap();
-            let url = url_builder::url(
-                &self.session_manager.credentials.dev_id,
-                &self.session_manager.credentials.dev_key,
-                &session_key,
-                &self.session_manager.base_url,
-                &UrlConstants::GetMatchIdsByQueue,
-                &ReturnDataType::Json,
-                &format!(
-                    "/{}/{}/{}",
-                    queue_id.val(),
-                    format_date(date),
-                    time_window_to_retrieve
-                ),
-            );
-
-            response_text = reqwest_to_text(url);
-
-            if response_text.contains("Invalid session id") {
-                self.session_manager.remove_invalid_session(session_key);
-            }
-
-            else {
-                self.session_manager.replace_session(session_key);
-                break;
-            }
-        }
-
-        let replies: Vec<GetMatchIdsByQueueReply> =
-            match serde_json::from_str(&response_text.clone()) {
-                Ok(json) => json,
-                Err(_) => panic!("Error deserializing get match ids by queue reply"),
+            match VALID_HOURS.iter().find(|&&x| x == hour) {
+                Some(_) => {}
+                None => panic!("Invalid hour specified"),
+            };
+            match VALID_MINUTES.iter().find(|&&x| x == minute) {
+                Some(_) => {}
+                None => panic!("Invalid minute specified"),
             };
 
-        match &replies[0].ret_msg {
-            Some(msg) => panic!(format!("GetMatchIdsByQueue Request Error: {}", msg)),
-            None => {}
-        };
-
-        replies
-            .into_iter()
-            .filter_map(|x| match x.Active_Flag {
-                Some('n') => x.Match,
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub fn get_match_details(&mut self, match_id: String) -> Vec<PlayerMatchDetails> {
-        let mut response_text: String;
-        loop {
-            let session_key = self.session_manager.get_session_key().unwrap();
-            let url = url_builder::url(
-                &self.session_manager.credentials.dev_id,
-                &self.session_manager.credentials.dev_key,
-                &session_key,
-                &self.session_manager.base_url,
-                &UrlConstants::GetMatchDetails,
-                &ReturnDataType::Json,
-                &format!("/{}", match_id),
-            );
-
-            response_text = reqwest_to_text(url);
-
-            if response_text.contains("Invalid session id") {
-                self.session_manager.remove_invalid_session(session_key);
+            if &hour == "-1" && &minute == "" {
+                time_window_to_retrieve = String::from("-1");
+            } else if &hour == "-1" && &minute != "" {
+                panic!("Invalid combination of hour and minute");
+            } else {
+                time_window_to_retrieve = format!("{},{}", hour, minute);
             }
-
-            else {
-                self.session_manager.replace_session(session_key);
-                break;
-            }
+            url_optionals.push(format!(
+                "/{}/{}/{}",
+                queue_id.val(),
+                format_date(date),
+                time_window_to_retrieve
+            ));
         }
 
-        let replies: Vec<PlayerMatchDetails> = match serde_json::from_str(&response_text.clone()) {
-            Ok(json) => json,
-            Err(msg) => panic!(format!(
-                "Error deserializing get match details reply: {}",
-                msg
-            )),
-        };
+        let responses = self.concurrent_reqwest(UrlConstants::GetMatchIdsByQueue, url_optionals);
 
-        match &replies[0].ret_msg {
-            Some(msg) => panic!(format!("GetMatchDetails Request Error: {}", msg)),
-            None => {}
-        };
+        let mut all_ids: Vec<String> = Vec::new();
+        for response_text in responses {
+            let replies: Vec<GetMatchIdsByQueueReply> =
+                match serde_json::from_str(&response_text.clone()) {
+                    Ok(json) => json,
+                    Err(msg) => {
+                        let mut file = File::create("debug_dump.json").unwrap();
+                        file.write_all(response_text.as_bytes()).unwrap();
+                        panic!(format!(
+                            "Error deserializing get match ids by queue reply: {}",
+                            msg
+                        ));
+                    }
+                };
 
-        replies
+            match &replies[0].ret_msg {
+                Some(msg) => panic!(format!("GetMatchIdsByQueue Request Error: {}", msg)),
+                None => {}
+            };
+
+            all_ids.push(
+                replies
+                    .into_iter()
+                    .filter_map(|x| match x.Active_Flag {
+                        Some('n') => x.Match,
+                        _ => None,
+                    })
+                    .collect(),
+            )
+        }
+
+        all_ids
     }
 
-    pub fn get_match_details_batch(&self, mut match_ids: Vec<String>) -> Vec<PlayerMatchDetails> {
+    pub fn get_match_details(&self, mut match_ids: Vec<String>) -> Vec<PlayerMatchDetails> {
         let match_ids_len: f32 = match_ids.len() as f32;
         let num_urls_needed: f32 = match_ids_len / 10_f32;
         let num_urls_needed: usize = num_urls_needed.ceil() as usize;
@@ -202,47 +161,8 @@ impl RequestMaker {
             id_strings.push(construct_batch_match_id_string(ids));
         }
 
-        let mut handles = vec![];
-        let responses = Arc::new(Mutex::new(Vec::new()));
-        for id_string in id_strings {
-            let session_manager = Arc::clone(&self.session_manager);
-            let responses = Arc::clone(&responses);
-            let handle = thread::spawn(move || {
-                let mut response_text: String;
-                loop {
-                    let session_key = session_manager.get_session_key_concurrent();
-                    let url = url_builder::url(
-                        &session_manager.credentials.dev_id,
-                        &session_manager.credentials.dev_key,
-                        &String::from(session_key.clone()),
-                        &session_manager.base_url,
-                        &UrlConstants::GetMatchDetailsBatch,
-                        &ReturnDataType::Json,
-                        &id_string,
-                    );
+        let responses = self.concurrent_reqwest(UrlConstants::GetMatchDetailsBatch, id_strings);
 
-                    response_text = reqwest_to_text(url);
-
-                    if response_text.contains("Invalid session id") {
-                        session_manager.remove_invalid_session(session_key);
-                    }
-
-                    else {
-                        session_manager.replace_session(session_key);
-                        break;
-                    }
-                }
-
-                responses.lock().unwrap().push(response_text);
-            });
-            handles.push(handle);
-        }
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        let responses = (*responses.lock().unwrap()).clone();
         let mut replies: Vec<PlayerMatchDetails> = Vec::new();
         for response in responses {
             let mut reply: Vec<PlayerMatchDetails> = match serde_json::from_str(&response) {
@@ -266,6 +186,56 @@ impl RequestMaker {
 
         replies
     }
+
+    fn concurrent_reqwest(
+        &self,
+        endpoint: UrlConstants,
+        url_optionals: Vec<String>,
+    ) -> Vec<String> {
+        let mut handles = vec![];
+        let arc_endpoint = Arc::new(endpoint);
+        let responses = Arc::new(Mutex::new(Vec::new()));
+        for url_optional in url_optionals {
+            let session_manager = Arc::clone(&self.session_manager);
+            let endpoint = Arc::clone(&arc_endpoint);
+            let responses = Arc::clone(&responses);
+            let handle = thread::spawn(move || {
+                let mut response_text: String;
+                loop {
+                    let session_key = session_manager.get_session_key_concurrent();
+                    let url = url_builder::url(
+                        &session_manager.credentials.dev_id,
+                        &session_manager.credentials.dev_key,
+                        &String::from(session_key.clone()),
+                        &session_manager.base_url,
+                        &(*endpoint),
+                        &ReturnDataType::Json,
+                        &url_optional,
+                    );
+
+                    response_text = reqwest_to_text(url);
+
+                    if response_text.contains("Invalid session id") {
+                        session_manager.remove_invalid_session(session_key);
+                    } else {
+                        session_manager.replace_session(session_key);
+                        break;
+                    }
+                }
+
+                responses.lock().unwrap().push(response_text);
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let to_ret = (*responses.lock().unwrap()).clone();
+
+        to_ret
+    }
 }
 
 #[cfg(test)]
@@ -281,12 +251,12 @@ mod tests {
         let mut request_maker = RequestMaker {
             session_manager: Arc::new(session_manager),
         };
-        let replies = request_maker.get_match_ids_by_queue(
-            DataConstants::RankedConquest,
-            Utc.ymd(2019, 8, 5),
-            String::from("0"),
-            String::from("00"),
-        );
+        let replies = request_maker.get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
+            queue_id: DataConstants::RankedConquest,
+            date: Utc.ymd(2019, 8, 5),
+            hour: String::from("0"),
+            minute: String::from("00"),
+        }]);
 
         assert_eq!(replies[0], String::from("956598608"));
     }
@@ -295,10 +265,10 @@ mod tests {
     fn test_get_match_details() {
         let auth = Auth::from_file("../hirez-dev-credentials.txt");
         let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
-        let mut request_maker = RequestMaker {
+        let request_maker = RequestMaker {
             session_manager: Arc::new(session_manager),
         };
-        let replies = request_maker.get_match_details(String::from("956598608"));
+        let replies = request_maker.get_match_details(vec![String::from("956598608")]);
 
         assert_eq!(replies[0].playerId, Some(String::from("4203198")));
     }
@@ -310,14 +280,14 @@ mod tests {
         let mut request_maker = RequestMaker {
             session_manager: Arc::new(session_manager),
         };
-        let replies = request_maker.get_match_ids_by_queue(
-            DataConstants::RankedConquest,
-            Utc.ymd(2019, 8, 5),
-            String::from("-1"),
-            String::from(""),
-        );
+        let replies = request_maker.get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
+            queue_id: DataConstants::RankedConquest,
+            date: Utc.ymd(2019, 8, 5),
+            hour: String::from("-1"),
+            minute: String::from(""),
+        }]);
 
-        let replies = request_maker.get_match_details_batch(replies);
+        let replies = request_maker.get_match_details(replies);
 
         assert_eq!(replies.len(), 30880);
     }
