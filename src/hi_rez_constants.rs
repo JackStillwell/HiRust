@@ -62,7 +62,7 @@ impl LimitConstants {
     pub fn val(&self) -> u16 {
         match *self {
             // this is set a little under the actual limit of 50 for safety
-            LimitConstants::ConcurrentSessions => 20,
+            LimitConstants::ConcurrentSessions => 45,
             LimitConstants::SessionsPerDay => 500,
             LimitConstants::SessionTimeLimit => 900,
             LimitConstants::RequestsPerDay => 7500,

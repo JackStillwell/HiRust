@@ -34,12 +34,12 @@ pub fn reqwest_to_text(url: String) -> String {
 
     let mut response = match response_result {
         Ok(response) => response,
-        Err(_) => panic!("Error reqwesting session"),
+        Err(msg) => panic!("Error reqwesting session: {}", msg),
     };
 
     match response.text() {
         Ok(text) => text,
-        Err(_) => panic!("Error decoding response"),
+        Err(msg) => panic!("Error decoding response: {}", msg),
     }
 }
 

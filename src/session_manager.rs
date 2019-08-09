@@ -78,11 +78,11 @@ impl SessionManager {
      * Retrieves the first valid session, creating if possible and discarding any invalid sessions
      */
     pub fn get_session_key(&self) -> Option<String> {
+        let mut active_sessions = self.active_sessions.lock().unwrap();
+        let mut idle_sessions = self.idle_sessions.lock().unwrap();
         let mut valid_session_count = self.valid_session_count.lock().unwrap();
         let num_sessions: u16 = (*valid_session_count).try_into().unwrap();
         let mut sessions_created = self.sessions_created.lock().unwrap();
-        let mut idle_sessions = self.idle_sessions.lock().unwrap();
-        let mut active_sessions = self.active_sessions.lock().unwrap();
 
         // check every session in idle_sessions and if valid, return
         //   if not valid, discard and look for the next one
@@ -121,12 +121,12 @@ impl SessionManager {
         let mut rng = thread_rng();
         loop {
             match self.get_session_key() {
-                Some(key) => return key,
+                Some(key) => {
+                    println!("Waited {} seconds for a session", wait_count);
+                    return key;
+                }
                 // sleep for one second and between 0 and 5 nanoseconds
                 None => {
-                    if wait_count > 10 {
-                        panic!("Waited for longer than 10 seconds for a session")
-                    }
                     wait_count += 1;
                     sleep(Duration::new(1, rng.gen_range(0, 5)));
                 }
