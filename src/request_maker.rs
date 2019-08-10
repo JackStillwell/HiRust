@@ -29,7 +29,7 @@ fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
     ret_string
 }
 
-pub fn reqwest_to_text(url: String) -> String {
+pub fn reqwest_to_text(url: String) -> Result<String, String> {
     let mut error_messages: Vec<String> = Vec::new();
     let mut ret_text: String = String::new();
     for _ in 0..3 {
@@ -53,14 +53,14 @@ pub fn reqwest_to_text(url: String) -> String {
     }
 
     if error_messages.len() < 3 {
-        ret_text
+        return Ok(ret_text);
     } else {
         let mut error_string: String = String::new();
         for error in error_messages {
             let msg: String = format!(" {} |", error);
             error_string.push_str(&msg);
         }
-        panic!(error_string);
+        return Err(error_string);
     }
 }
 
@@ -79,7 +79,7 @@ impl RequestMaker {
     pub fn get_match_ids_by_queue(
         &mut self,
         requests: Vec<GetMatchIdsByQueueRequest>,
-    ) -> Vec<String> {
+    ) -> Result<Vec<String>, String> {
         let mut url_optionals: Vec<String> = Vec::new();
         for request in requests {
             let queue_id = request.queue_id;
@@ -91,17 +91,17 @@ impl RequestMaker {
 
             match VALID_HOURS.iter().find(|&&x| x == hour) {
                 Some(_) => {}
-                None => panic!("Invalid hour specified"),
+                None => return Err(String::from("Invalid hour specified")),
             };
             match VALID_MINUTES.iter().find(|&&x| x == minute) {
                 Some(_) => {}
-                None => panic!("Invalid minute specified"),
+                None => return Err(String::from("Invalid minute specified")),
             };
 
             if &hour == "-1" && &minute == "" {
                 time_window_to_retrieve = String::from("-1");
             } else if &hour == "-1" && &minute != "" {
-                panic!("Invalid combination of hour and minute");
+                return Err(String::from("Invalid combination of hour and minute"));
             } else {
                 time_window_to_retrieve = format!("{},{}", hour, minute);
             }
@@ -123,7 +123,7 @@ impl RequestMaker {
                     Err(msg) => {
                         let mut file = File::create("debug_dump.json").unwrap();
                         file.write_all(response_text.as_bytes()).unwrap();
-                        panic!(format!(
+                        return Err(format!(
                             "Error deserializing get match ids by queue reply: {}",
                             msg
                         ));
@@ -131,25 +131,25 @@ impl RequestMaker {
                 };
 
             match &replies[0].ret_msg {
-                Some(msg) => panic!(format!("GetMatchIdsByQueue Request Error: {}", msg)),
+                Some(msg) => return Err(format!("GetMatchIdsByQueue Request Error: {}", msg)),
                 None => {}
             };
 
-            all_ids.push(
-                replies
-                    .into_iter()
-                    .filter_map(|x| match x.Active_Flag {
-                        Some('n') => x.Match,
-                        _ => None,
-                    })
-                    .collect(),
-            )
+            let mut replies: Vec<String> = replies.into_iter().filter_map(|x| match x.Active_Flag {
+                Some('n') => x.Match,
+                _ => None,
+            }).collect();
+
+            all_ids.append(&mut replies);
         }
 
-        all_ids
+        Ok(all_ids)
     }
 
-    pub fn get_match_details(&self, mut match_ids: Vec<String>) -> Vec<PlayerMatchDetails> {
+    pub fn get_match_details(
+        &self,
+        mut match_ids: Vec<String>,
+    ) -> Result<Vec<PlayerMatchDetails>, String> {
         let match_ids_len: f32 = match_ids.len() as f32;
         let num_urls_needed: f32 = match_ids_len / 10_f32;
         let num_urls_needed: usize = num_urls_needed.ceil() as usize;
@@ -170,7 +170,7 @@ impl RequestMaker {
                 Err(msg) => {
                     let mut file = File::create("debug_dump.json").unwrap();
                     file.write_all(response.as_bytes()).unwrap();
-                    panic!(format!(
+                    return Err(format!(
                         "Error deserializing get match details batch reply: {}",
                         msg
                     ));
@@ -180,11 +180,11 @@ impl RequestMaker {
         }
 
         match &replies[0].ret_msg {
-            Some(msg) => panic!(format!("GetMatchDetails Request Error: {}", msg)),
+            Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
             None => {}
         };
 
-        replies
+        Ok(replies)
     }
 
     fn concurrent_reqwest(
@@ -202,7 +202,13 @@ impl RequestMaker {
             let handle = thread::spawn(move || {
                 let mut response_text: String;
                 loop {
-                    let session_key = session_manager.get_session_key_concurrent();
+                    let session_key = match session_manager.get_session_key_concurrent() {
+                        Ok(key) => key,
+                        Err(msg) => {
+                            println!("{}", msg);
+                            return;
+                        }
+                    };
                     let url = url_builder::url(
                         &session_manager.credentials.dev_id,
                         &session_manager.credentials.dev_key,
@@ -213,7 +219,13 @@ impl RequestMaker {
                         &url_optional,
                     );
 
-                    response_text = reqwest_to_text(url);
+                    response_text = match reqwest_to_text(url) {
+                        Ok(text) => text,
+                        Err(msg) => {
+                            println!("{}", msg);
+                            return;
+                        }
+                    };
 
                     if response_text.contains("Invalid session id") {
                         session_manager.remove_invalid_session(session_key);
@@ -251,12 +263,14 @@ mod tests {
         let mut request_maker = RequestMaker {
             session_manager: Arc::new(session_manager),
         };
-        let replies = request_maker.get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
-            queue_id: DataConstants::RankedConquest,
-            date: Utc.ymd(2019, 8, 5),
-            hour: String::from("0"),
-            minute: String::from("00"),
-        }]);
+        let replies = request_maker
+            .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
+                queue_id: DataConstants::RankedConquest,
+                date: Utc.ymd(2019, 8, 5),
+                hour: String::from("0"),
+                minute: String::from("00"),
+            }])
+            .unwrap();
 
         assert_eq!(replies[0], String::from("956598608"));
     }
@@ -268,7 +282,9 @@ mod tests {
         let request_maker = RequestMaker {
             session_manager: Arc::new(session_manager),
         };
-        let replies = request_maker.get_match_details(vec![String::from("956598608")]);
+        let replies = request_maker
+            .get_match_details(vec![String::from("956598608")])
+            .unwrap();
 
         assert_eq!(replies[0].playerId, Some(String::from("4203198")));
     }
@@ -280,14 +296,16 @@ mod tests {
         let mut request_maker = RequestMaker {
             session_manager: Arc::new(session_manager),
         };
-        let replies = request_maker.get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
-            queue_id: DataConstants::RankedConquest,
-            date: Utc.ymd(2019, 8, 5),
-            hour: String::from("-1"),
-            minute: String::from(""),
-        }]);
+        let replies = request_maker
+            .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
+                queue_id: DataConstants::RankedConquest,
+                date: Utc.ymd(2019, 8, 5),
+                hour: String::from("-1"),
+                minute: String::from(""),
+            }])
+            .unwrap();
 
-        let replies = request_maker.get_match_details(replies);
+        let replies = request_maker.get_match_details(replies).unwrap();
 
         assert_eq!(replies.len(), 30880);
     }

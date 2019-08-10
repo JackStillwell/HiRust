@@ -48,13 +48,6 @@ pub struct Session {
     creation_timestamp: i64,
 }
 
-impl Session {
-    pub fn is_valid(&self) -> bool {
-        let seconds_active = Utc::now().timestamp() - self.creation_timestamp;
-        return seconds_active < (LimitConstants::SessionTimeLimit.val() as i64);
-    }
-}
-
 pub struct SessionManager {
     idle_sessions: Mutex<VecDeque<Session>>,
     active_sessions: Mutex<Vec<Session>>,
@@ -144,7 +137,7 @@ impl SessionManager {
     /*
      * Retrieves the first valid session, creating if necessary
      */
-    pub fn get_session_key(&self) -> Option<String> {
+    pub fn get_session_key(&self) -> Result<String, String> {
         let mut active_sessions = self.active_sessions.lock().unwrap();
         let mut idle_sessions = self.idle_sessions.lock().unwrap();
         let mut valid_session_count = self.valid_session_count.lock().unwrap();
@@ -152,58 +145,50 @@ impl SessionManager {
         let mut sessions_created = self.sessions_created.lock().unwrap();
         let mut num_requests = self.num_requests.lock().unwrap();
 
-        // reimplment the match some / none on pop
-        // TODO: remove my is_valid in favor of retrying
-        //         and trusting hirez (they're the source
-        //         of truth here)
-        while let Some(session) = idle_sessions.pop_front() {
-            match session.is_valid() {
-                true => {
-                    let key = session.session_key.clone();
-                    active_sessions.push(session);
-                    *num_requests += 1;
-                    return Some(key);
-                }
-                false => {
-                    *valid_session_count -= 1;
-                }
+        match idle_sessions.pop_front() {
+            Some(session) => {
+                let key = session.session_key.clone();
+                active_sessions.push(session);
+                *num_requests += 1;
+                return Ok(key);
             }
+            None => {}
         }
 
-        // TODO: Implement this pattern better
-        match *sessions_created < LimitConstants::SessionsPerDay.val() {
-            true => match num_sessions < LimitConstants::ConcurrentSessions.val() {
-                true => match *num_requests < LimitConstants::RequestsPerDay.val() {
-                    true => {
-                        let new_session = self.create_session();
-                        let key = new_session.session_key.clone();
-                        active_sessions.push(new_session);
-                        *valid_session_count += 1;
-                        *sessions_created += 1;
-                        *num_requests += 1;
-                        Some(key)
-                    }
-                    false => panic!("Maximum number of requests per day reached"),
-                },
-                false => None,
-            },
-            false => panic!("Maximum number of sessions per day reached"),
+        if *sessions_created >= LimitConstants::SessionsPerDay.val() {
+            return Err(String::from("Maximum number of sessions per day reached"));
+        } else if *num_requests >= LimitConstants::RequestsPerDay.val() {
+            return Err(String::from("Maximum number of requests per day reached"));
+        } else if num_sessions >= LimitConstants::ConcurrentSessions.val() {
+            return Err(String::from("No sessions available"));
+        } else {
+            let new_session = self.create_session();
+            match new_session {
+                Ok(new_session) => {
+                    let key = new_session.session_key.clone();
+                    active_sessions.push(new_session);
+                    *valid_session_count += 1;
+                    *sessions_created += 1;
+                    *num_requests += 1;
+                    return Ok(key);
+                }
+                Err(msg) => return Err(msg),
+            }
         }
     }
 
-    pub fn get_session_key_concurrent(&self) -> String {
-        let mut wait_count = 0;
+    pub fn get_session_key_concurrent(&self) -> Result<String, String> {
         let mut rng = thread_rng();
         loop {
             match self.get_session_key() {
-                Some(key) => {
-                    println!("Waited {} seconds for a session", wait_count);
-                    return key;
-                }
+                Ok(key) => return Ok(key),
                 // sleep for one second and between 0 and 5 nanoseconds
-                None => {
-                    wait_count += 1;
-                    sleep(Duration::new(1, rng.gen_range(0, 5)));
+                Err(msg) => {
+                    if msg == String::from("No sessions available") {
+                        sleep(Duration::new(1, rng.gen_range(0, 5)));
+                    } else {
+                        return Err(msg);
+                    }
                 }
             };
         }
@@ -230,7 +215,7 @@ impl SessionManager {
         *self.valid_session_count.lock().unwrap() -= 1;
     }
 
-    fn create_session(&self) -> Session {
+    fn create_session(&self) -> Result<Session, String> {
         let url = url_builder::session_url(
             &self.base_url,
             &ReturnDataType::Json,
@@ -238,31 +223,42 @@ impl SessionManager {
             &self.credentials.dev_key,
         );
 
-        let response_text: String = request_maker::reqwest_to_text(url);
+        let response_text: String = match request_maker::reqwest_to_text(url) {
+            Ok(text) => text,
+            Err(msg) => return Err(msg),
+        };
 
         let reply: CreateSessionReply = match serde_json::from_str(&response_text.clone()) {
             Ok(json) => json,
-            Err(_) => panic!("Error deserializing create session reply"),
+            Err(msg) => return Err(format!("Error deserializing create session reply: {}", msg)),
         };
 
         match reply.ret_msg {
             Some(msg) => {
                 if msg != String::from("Approved") {
-                    panic!(format!("CreateSession Request Error: {}", msg))
+                    return Err(format!("CreateSession Request Error: {}", msg));
                 }
             }
-            None => panic!("CreateSession Request Error: ret_msg was null"),
+            None => {
+                return Err(String::from(
+                    "CreateSession Request Error: ret_msg was null",
+                ))
+            }
         }
 
         let key = match reply.session_id {
             Some(key) => key,
-            None => panic!("CreateSession Request Error: session_id was null"),
+            None => {
+                return Err(String::from(
+                    "CreateSession Request Error: session_id was null",
+                ))
+            }
         };
 
-        Session {
+        Ok(Session {
             session_key: key,
             creation_timestamp: Utc::now().timestamp(),
-        }
+        })
     }
 }
 
