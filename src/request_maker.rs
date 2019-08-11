@@ -29,6 +29,7 @@ fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
     ret_string
 }
 
+#[cfg(not(test))]
 pub fn reqwest_to_text(url: String) -> Result<String, String> {
     let mut error_messages: Vec<String> = Vec::new();
     let mut ret_text: String = String::new();
@@ -135,10 +136,13 @@ impl RequestMaker {
                 None => {}
             };
 
-            let mut replies: Vec<String> = replies.into_iter().filter_map(|x| match x.Active_Flag {
-                Some('n') => x.Match,
-                _ => None,
-            }).collect();
+            let mut replies: Vec<String> = replies
+                .into_iter()
+                .filter_map(|x| match x.Active_Flag {
+                    Some('n') => x.Match,
+                    _ => None,
+                })
+                .collect();
 
             all_ids.append(&mut replies);
         }
@@ -248,6 +252,24 @@ impl RequestMaker {
 
         to_ret
     }
+}
+
+// MOCK REQUEST MAKER FOR DUMMY URL CALLS
+#[cfg(test)]
+use rand::{thread_rng, Rng};
+#[cfg(test)]
+fn reqwest_to_text(_url: String) -> Result<String, String> {
+    let mut randgen = thread_rng();
+    let mut session_id_array = [0u8; 10];
+    randgen.fill(&mut session_id_array);
+    let mut session_id = String::new();
+    for num in session_id_array.iter() {
+        session_id.push_str(&num.to_string());
+    }
+    Ok(format!(
+        "{{ \"ret_msg\": \"Approved\", \"session_id\": \"{}\", \"timestamp\": null }}",
+        session_id
+    ))
 }
 
 #[cfg(test)]

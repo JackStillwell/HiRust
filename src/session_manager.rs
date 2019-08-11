@@ -282,9 +282,19 @@ impl SessionManager {
 // MOCK REQUEST MAKER FOR DUMMY URL CALLS
 #[cfg(test)]
 mod request_maker {
+    use rand::{thread_rng, Rng};
+
     pub fn reqwest_to_text(_url: String) -> Result<String, String> {
-        Ok(String::from(
-            "{ \"ret_msg\": \"Approved\", \"session_id\": \"1234567890\", \"timestamp\": null }",
+        let mut randgen = thread_rng();
+        let mut session_id_array = [0u8; 10];
+        randgen.fill(&mut session_id_array);
+        let mut session_id = String::new();
+        for num in session_id_array.iter() {
+            session_id.push_str(&num.to_string());
+        }
+        Ok(format!(
+            "{{ \"ret_msg\": \"Approved\", \"session_id\": \"{}\", \"timestamp\": null }}",
+            session_id
         ))
     }
 }
