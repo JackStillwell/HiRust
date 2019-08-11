@@ -155,3 +155,12 @@ pub struct PlayerMatchDetails {
     pub playerPortalUserId: Option<String>,
     pub ret_msg: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn get_size_of_struct() {
+        println!("{}", std::mem::size_of::<PlayerMatchDetails>());
+    }
+}

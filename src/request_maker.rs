@@ -1,14 +1,24 @@
-use chrono::{Date, Datelike, Utc};
 use std::cmp;
 use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use chrono::{Date, Datelike, Utc};
 
 use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
 use crate::models::{GetMatchIdsByQueueReply, PlayerMatchDetails};
 use crate::session_manager::SessionManager;
 use crate::url_builder;
+
+cfg_if::cfg_if! {
+    if #[cfg(test)] {
+        use galvanic_test::test_suite;
+        use crate::reqwest_wrapper::MockReqwestWrapper as ReqwestWrapper;
+    }
+    else {
+        use crate::reqwest_wrapper::ReqwestWrapper;
+    }
+}
 
 const VALID_HOURS: [&str; 25] = [
     "-1", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
@@ -29,46 +39,6 @@ fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
     ret_string
 }
 
-#[cfg(not(test))]
-pub fn reqwest_to_text(url: String) -> Result<String, String> {
-    let mut error_messages: Vec<String> = Vec::new();
-    let mut ret_text: String = String::new();
-    for _ in 0..3 {
-        let response_result = reqwest::get(&url);
-
-        let mut response = match response_result {
-            Ok(response) => response,
-            Err(msg) => {
-                error_messages.push(format!("Error reqwesting url: {}", msg));
-                continue;
-            }
-        };
-
-        match response.text() {
-            Ok(text) => {
-                ret_text = text;
-                break;
-            }
-            Err(msg) => error_messages.push(format!("Error decoding response: {}", msg)),
-        }
-    }
-
-    if error_messages.len() < 3 {
-        return Ok(ret_text);
-    } else {
-        let mut error_string: String = String::new();
-        for error in error_messages {
-            let msg: String = format!(" {} |", error);
-            error_string.push_str(&msg);
-        }
-        return Err(error_string);
-    }
-}
-
-pub struct RequestMaker {
-    session_manager: Arc<SessionManager>,
-}
-
 pub struct GetMatchIdsByQueueRequest {
     queue_id: DataConstants,
     date: Date<Utc>,
@@ -76,7 +46,33 @@ pub struct GetMatchIdsByQueueRequest {
     minute: String,
 }
 
+pub struct RequestMaker {
+    session_manager: Arc<SessionManager>,
+    reqwest: Arc<ReqwestWrapper>,
+}
+
 impl RequestMaker {
+
+    #[cfg(not(test))]
+    pub fn new(session_manager: SessionManager) -> RequestMaker {
+        RequestMaker {
+            session_manager: Arc::new(session_manager),
+            reqwest: Arc::new(ReqwestWrapper {})
+        }
+    }
+
+    #[cfg(test)]
+    pub fn mock(reqwest: ReqwestWrapper) -> RequestMaker {
+        let mut dummy_reqwest = ReqwestWrapper::new();
+        dummy_reqwest.expect_get_to_text().returning(|_x| Ok(String::from(
+            "{{ \"ret_msg\": \"Approved\", \"session_id\": \"1234567890\", \"timestamp\": null }}"
+        )));
+        RequestMaker {
+            session_manager: Arc::new(SessionManager::mock(dummy_reqwest)),
+            reqwest: Arc::new(reqwest),
+        }
+    }
+
     pub fn get_match_ids_by_queue(
         &mut self,
         requests: Vec<GetMatchIdsByQueueRequest>,
@@ -201,6 +197,7 @@ impl RequestMaker {
         let responses = Arc::new(Mutex::new(Vec::new()));
         for url_optional in url_optionals {
             let session_manager = Arc::clone(&self.session_manager);
+            let reqwest = Arc::clone(&self.reqwest);
             let endpoint = Arc::clone(&arc_endpoint);
             let responses = Arc::clone(&responses);
             let handle = thread::spawn(move || {
@@ -223,7 +220,7 @@ impl RequestMaker {
                         &url_optional,
                     );
 
-                    response_text = match reqwest_to_text(url) {
+                    response_text = match reqwest.get_to_text(url) {
                         Ok(text) => text,
                         Err(msg) => {
                             println!("{}", msg);
@@ -254,37 +251,17 @@ impl RequestMaker {
     }
 }
 
-// MOCK REQUEST MAKER FOR DUMMY URL CALLS
 #[cfg(test)]
-use rand::{thread_rng, Rng};
-#[cfg(test)]
-fn reqwest_to_text(_url: String) -> Result<String, String> {
-    let mut randgen = thread_rng();
-    let mut session_id_array = [0u8; 10];
-    randgen.fill(&mut session_id_array);
-    let mut session_id = String::new();
-    for num in session_id_array.iter() {
-        session_id.push_str(&num.to_string());
-    }
-    Ok(format!(
-        "{{ \"ret_msg\": \"Approved\", \"session_id\": \"{}\", \"timestamp\": null }}",
-        session_id
-    ))
-}
-
-#[cfg(test)]
-mod tests {
+test_suite! {
+    name test_request_maker;
     use super::*;
-    use crate::session_manager::Auth;
     use chrono::TimeZone;
+    use crate::test_responses;
 
-    #[test]
-    fn test_get_match_ids_by_queue() {
-        let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
-        let mut request_maker = RequestMaker {
-            session_manager: Arc::new(session_manager),
-        };
+    test get_match_ids_by_queue() {
+        let mut reqwest = ReqwestWrapper::new();
+        reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
+        let mut request_maker = RequestMaker::mock(reqwest);
         let replies = request_maker
             .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
                 queue_id: DataConstants::RankedConquest,
@@ -297,38 +274,15 @@ mod tests {
         assert_eq!(replies[0], String::from("956598608"));
     }
 
-    #[test]
-    fn test_get_match_details() {
-        let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
-        let request_maker = RequestMaker {
-            session_manager: Arc::new(session_manager),
-        };
+    test get_match_details() {
+        let mut reqwest = ReqwestWrapper::new();
+        reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_DETAILS)));
+        let request_maker = RequestMaker::mock(reqwest);
+
         let replies = request_maker
             .get_match_details(vec![String::from("956598608")])
             .unwrap();
 
         assert_eq!(replies[0].playerId, Some(String::from("4203198")));
-    }
-
-    #[test]
-    fn test_get_match_details_batch() {
-        let auth = Auth::from_file("../hirez-dev-credentials.txt");
-        let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
-        let mut request_maker = RequestMaker {
-            session_manager: Arc::new(session_manager),
-        };
-        let replies = request_maker
-            .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
-                queue_id: DataConstants::RankedConquest,
-                date: Utc.ymd(2019, 8, 5),
-                hour: String::from("-1"),
-                minute: String::from(""),
-            }])
-            .unwrap();
-
-        let replies = request_maker.get_match_details(replies).unwrap();
-
-        assert_eq!(replies.len(), 30880);
     }
 }
