@@ -1,14 +1,15 @@
+use chrono::{TimeZone, Utc};
 use galvanic_test::test_suite;
-use chrono::{Utc, TimeZone};
 
+use hirust::hi_rez_constants::{DataConstants, UrlConstants};
+use hirust::request_maker::{GetMatchIdsByQueueRequest, RequestMaker};
 use hirust::session_manager::{Auth, SessionManager};
-use hirust::request_maker::{RequestMaker, GetMatchIdsByQueueRequest};
-use hirust::hi_rez_constants::{UrlConstants, DataConstants};
 
 test_suite! {
     name integration_test_request_maker;
     use super::*;
 
+    #[ignore]
     test bulk_pull() {
         let auth = Auth::from_file("../hirez-dev-credentials.txt");
         let session_manager = SessionManager::new(auth, UrlConstants::UrlBase);
