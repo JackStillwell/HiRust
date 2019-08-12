@@ -12,8 +12,3 @@ fn test_ping_url() {
     let response_text = response.unwrap().text().unwrap();
     assert_eq!(response_text.contains("SmiteAPI"), true);
 }
-
-#[test]
-fn test_create_session() {
-    assert_eq!(true, true);
-}

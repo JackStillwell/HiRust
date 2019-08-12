@@ -68,6 +68,7 @@ pub struct SessionManager {
     pub base_url: UrlConstants,
 }
 
+#[cfg(not(test))]
 impl Drop for SessionManager {
     fn drop(&mut self) {
         self.store();

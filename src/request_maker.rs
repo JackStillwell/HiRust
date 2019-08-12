@@ -1,4 +1,5 @@
 use chrono::{Date, Datelike, Utc};
+use pbr::ProgressBar;
 use std::cmp;
 use std::fs::File;
 use std::io::Write;
@@ -40,10 +41,10 @@ fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
 }
 
 pub struct GetMatchIdsByQueueRequest {
-    queue_id: DataConstants,
-    date: Date<Utc>,
-    hour: String,
-    minute: String,
+    pub queue_id: DataConstants,
+    pub date: Date<Utc>,
+    pub hour: String,
+    pub minute: String,
 }
 
 pub struct RequestMaker {
@@ -196,6 +197,7 @@ impl RequestMaker {
         let mut handles = vec![];
         let arc_endpoint = Arc::new(endpoint);
         let responses = Arc::new(Mutex::new(Vec::new()));
+        let mut pb = ProgressBar::new(url_optionals.len() as u64);
         for url_optional in url_optionals {
             let session_manager = Arc::clone(&self.session_manager);
             let reqwest = Arc::clone(&self.reqwest);
@@ -244,7 +246,10 @@ impl RequestMaker {
 
         for handle in handles {
             handle.join().unwrap();
+            pb.inc();
         }
+
+        pb.finish();
 
         let to_ret = (*responses.lock().unwrap()).clone();
 
