@@ -1,9 +1,9 @@
+use chrono::{Date, Datelike, Utc};
 use std::cmp;
 use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use chrono::{Date, Datelike, Utc};
 
 use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
 use crate::models::{GetMatchIdsByQueueReply, PlayerMatchDetails};
@@ -52,20 +52,21 @@ pub struct RequestMaker {
 }
 
 impl RequestMaker {
-
     #[cfg(not(test))]
     pub fn new(session_manager: SessionManager) -> RequestMaker {
         RequestMaker {
             session_manager: Arc::new(session_manager),
-            reqwest: Arc::new(ReqwestWrapper {})
+            reqwest: Arc::new(ReqwestWrapper {}),
         }
     }
 
     #[cfg(test)]
     pub fn mock(reqwest: ReqwestWrapper) -> RequestMaker {
         let mut dummy_reqwest = ReqwestWrapper::new();
-        dummy_reqwest.expect_get_to_text().returning(|_x| Ok(String::from(
-            "{{ \"ret_msg\": \"Approved\", \"session_id\": \"1234567890\", \"timestamp\": null }}"
+        dummy_reqwest
+            .expect_get_to_text()
+            .return_const(Ok(String::from(
+            "{ \"ret_msg\": \"Approved\", \"session_id\": \"1234567890\", \"timestamp\": null }",
         )));
         RequestMaker {
             session_manager: Arc::new(SessionManager::mock(dummy_reqwest)),

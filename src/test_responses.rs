@@ -13,7 +13,7 @@ pub const GET_MATCH_IDS_BY_QUEUE: &str = "[
         \"Active_Flag\": \"n\",
         \"Match\": \"956598612\",
         \"ret_msg\": null
-    }
+    },
     {
         \"Active_Flag\": \"n\",
         \"Match\": \"956598613\",
