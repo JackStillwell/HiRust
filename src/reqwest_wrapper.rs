@@ -1,7 +1,6 @@
-use mockall::*;
-
 cfg_if::cfg_if! {
     if #[cfg(test)] {
+        use mockall::*;
         use ::reqwest::Error;
         use MockReqwest as reqwest;
         use MockReqwestResponse as Response;
@@ -15,6 +14,11 @@ cfg_if::cfg_if! {
         trait ReqwestResponse {
             fn text(&mut self) -> Result<String, Error>;
         }
+
+        #[automock]
+        pub trait Wrapper {
+            fn get_to_text(&self, url: String) -> Result<String, String>;
+        }
     } else {
         use reqwest;
     }
@@ -22,7 +26,6 @@ cfg_if::cfg_if! {
 
 pub struct ReqwestWrapper {}
 
-#[automock]
 impl ReqwestWrapper {
     pub fn get_to_text(&self, url: String) -> Result<String, String> {
         let mut error_messages: Vec<String> = Vec::new();
