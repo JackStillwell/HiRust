@@ -1,14 +1,20 @@
-use ::reqwest::{Error, Response};
 use mockall::*;
-
-#[automock]
-trait Reqwest {
-    fn get(url: &str) -> Result<Response, Error>;
-}
 
 cfg_if::cfg_if! {
     if #[cfg(test)] {
+        use ::reqwest::Error;
         use MockReqwest as reqwest;
+        use MockReqwestResponse as Response;
+
+        #[automock]
+        trait Reqwest {
+            fn get(url: &str) -> Result<Response, Error>;
+        }
+
+        #[automock]
+        trait ReqwestResponse {
+            fn text(&mut self) -> Result<String, Error>;
+        }
     } else {
         use reqwest;
     }
