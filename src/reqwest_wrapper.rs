@@ -1,4 +1,18 @@
+use ::reqwest::{Error, Response};
 use mockall::*;
+
+#[automock]
+trait Reqwest {
+    fn get(url: &str) -> Result<Response, Error>;
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(test)] {
+        use MockReqwest as reqwest;
+    } else {
+        use reqwest;
+    }
+}
 
 pub struct ReqwestWrapper {}
 
