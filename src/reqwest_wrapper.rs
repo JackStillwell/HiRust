@@ -1,18 +1,18 @@
 cfg_if::cfg_if! {
     if #[cfg(test)] {
         use mockall::*;
-        use ::reqwest::Error;
         use MockReqwest as reqwest;
         use MockReqwestResponse as Response;
+        use galvanic_test::test_suite;
 
         #[automock]
         trait Reqwest {
-            fn get(url: &str) -> Result<Response, Error>;
+            fn get(url: &str) -> Result<Response, String>;
         }
 
         #[automock]
         trait ReqwestResponse {
-            fn text(&mut self) -> Result<String, Error>;
+            fn text(&mut self) -> Result<String, String>;
         }
 
         #[automock]
@@ -27,6 +27,10 @@ cfg_if::cfg_if! {
 pub struct ReqwestWrapper {}
 
 impl ReqwestWrapper {
+    pub fn new() -> ReqwestWrapper {
+        ReqwestWrapper {}
+    }
+
     pub fn get_to_text(&self, url: String) -> Result<String, String> {
         let mut error_messages: Vec<String> = Vec::new();
         let mut ret_text: String = String::new();
@@ -58,7 +62,23 @@ impl ReqwestWrapper {
                 let msg: String = format!(" {} |", error);
                 error_string.push_str(&msg);
             }
-            return Err(error_string);
+            let str_len = error_string.len();
+            let substring = &error_string[1..(str_len - 2)];
+            return Err(String::from(substring));
         }
+    }
+}
+
+#[cfg(test)]
+test_suite! {
+    name test_reqwest_wrapper;
+    use super::*;
+
+    test three_tries_fail() {
+        reqwest::expect_get().times(3).returning(|_x| Err(String::from("Failure")));
+        let reqwest_wrapper = ReqwestWrapper::new();
+        let results = reqwest_wrapper.get_to_text(String::from("bad_url"));
+        let failure_string = "Error reqwesting url: Failure | Error reqwesting url: Failure | Error reqwesting url: Failure";
+        assert_eq!(results, Err(String::from(failure_string)));
     }
 }
