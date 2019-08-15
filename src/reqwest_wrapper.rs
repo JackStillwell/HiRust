@@ -75,7 +75,13 @@ test_suite! {
     use super::*;
 
     test three_tries_fail_reqwest() {
-        reqwest::expect_get().returning(|_x| Err(String::from("Failure")));
+        reqwest::expect_get().returning(|x|
+            if x == String::from("bad_url") {
+                Err(String::from("Failure"))
+            } else {
+                Ok(Response::new().expect_text().return_const(Err(String::from("bad response"))))
+            }
+        );
         let reqwest_wrapper = ReqwestWrapper::new();
         let results = reqwest_wrapper.get_to_text(String::from("bad_url"));
         let failure_string = "Error reqwesting url: Failure | Error reqwesting url: Failure | Error reqwesting url: Failure";
@@ -83,9 +89,8 @@ test_suite! {
     }
 
     test three_tries_fail_response_text() {
-        reqwest::expect_get().returning(|_x| Ok(Response::new()));
         let reqwest_wrapper = ReqwestWrapper::new();
-        let results = reqwest_wrapper.get_to_text(String::from("bad_url"));
+        let results = reqwest_wrapper.get_to_text(String::from("bad_response"));
         let failure_string = "Error decoding response: Failure | Error decoding response: Failure | Error decoding response: Failure";
         assert_eq!(results, Err(String::from(failure_string)));
     }
