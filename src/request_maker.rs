@@ -363,15 +363,30 @@ test_suite! {
         assert_eq!(replies.len(), multiple_match_ids.val as usize);
     }
 
-    test get_match_details() {
+    fixture num_ids(request_vec: Vec<String>, num_calls: u8) -> u8 {
+        params {
+            vec![
+                (vec!["match_id"; 30].into_iter().map(|x| x.to_string()).collect(), 3),
+                (vec!["match_id"; 31].into_iter().map(|x| x.to_string()).collect(), 4),
+            ].into_iter()
+        }
+        setup(&mut self) {
+            *self.num_calls
+        }
+    }
+
+    test get_match_details_multiple_ids(num_ids) {
         let mut reqwest = ReqwestWrapper::new();
-        reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_DETAILS)));
+
+        // tests that 30 ids leads to 3 calls
+        reqwest.expect_get_to_text()
+               .times(num_ids.val as usize)
+               .returning(|_x| Ok(String::from(test_responses::GET_MATCH_DETAILS)));
+
         let request_maker = RequestMaker::mock(reqwest);
 
-        let replies = request_maker
-            .get_match_details(vec![String::from("956598608")])
+        let _replies = request_maker
+            .get_match_details((*num_ids.params.request_vec).clone())
             .unwrap();
-
-        assert_eq!(replies[0].playerId, Some(String::from("4203198")));
     }
 }
