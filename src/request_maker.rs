@@ -272,10 +272,53 @@ test_suite! {
         assert_eq!(generated_string, expected_string);
     }
 
-    test get_match_ids_by_queue() {
-        let mut reqwest = ReqwestWrapper::new();
-        reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
-        let mut request_maker = RequestMaker::mock(reqwest);
+    test construct_batch_match_id_string_correct() {
+        let match_ids: Vec<String> = vec!["1", "2", "3"].into_iter().map(|x| x.to_string()).collect();
+        let expected_string = String::from("/1,2,3");
+        assert_eq!(expected_string, construct_batch_match_id_string(match_ids));
+    }
+
+    fixture time_combos(hour: String, minute: String, response: String) -> String {
+        params {
+            vec![
+                (String::from("0"),String::from("00"), String::from("956598608")),
+                (String::from("-1"),String::from(""), String::from("956598608")),
+                (String::from("-1"),String::from("20"), String::from("Invalid combination of hour and minute")),
+                (String::from("-2"),String::from("20"), String::from("Invalid hour specified")),
+                (String::from("0"),String::from("23"), String::from("Invalid minute specified")),
+            ].into_iter()
+        }
+        setup(&mut self) {
+            String::from(self.response)
+        }
+    }
+
+    fixture match_ids_reqwest() -> RequestMaker {
+        setup(&mut self) {
+            let mut reqwest = ReqwestWrapper::new();
+            reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
+            RequestMaker::mock(reqwest)
+        }
+    }
+
+    test get_match_ids_by_queue_valid_time(time_combos, match_ids_reqwest) {
+        let mut request_maker = match_ids_reqwest.val;
+        let replies = request_maker
+            .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
+                queue_id: DataConstants::RankedConquest,
+                date: Utc.ymd(2019, 8, 5),
+                hour: String::from(time_combos.params.hour),
+                minute: String::from(time_combos.params.minute),
+            }]);
+
+        match replies {
+            Ok(response) => assert_eq!(response[0], time_combos.val),
+            Err(response) => assert_eq!(response, time_combos.val)
+        }
+    }
+
+    test get_match_ids_by_queue(match_ids_reqwest) {
+        let mut request_maker = match_ids_reqwest.val;
         let replies = request_maker
             .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
                 queue_id: DataConstants::RankedConquest,
