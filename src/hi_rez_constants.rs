@@ -38,6 +38,7 @@ impl ReturnDataType {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum DataConstants {
     RankedConquest,
 }

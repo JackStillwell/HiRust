@@ -41,6 +41,7 @@ fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
     ret_string
 }
 
+#[derive(Debug, Clone)]
 pub struct GetMatchIdsByQueueRequest {
     pub queue_id: DataConstants,
     pub date: Date<Utc>,
@@ -278,6 +279,14 @@ test_suite! {
         assert_eq!(expected_string, construct_batch_match_id_string(match_ids));
     }
 
+    fixture match_ids_reqwest() -> RequestMaker {
+        setup(&mut self) {
+            let mut reqwest = ReqwestWrapper::new();
+            reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
+            RequestMaker::mock(reqwest)
+        }
+    }
+
     fixture time_combos(hour: String, minute: String, response: String) -> String {
         params {
             vec![
@@ -290,14 +299,6 @@ test_suite! {
         }
         setup(&mut self) {
             String::from(self.response)
-        }
-    }
-
-    fixture match_ids_reqwest() -> RequestMaker {
-        setup(&mut self) {
-            let mut reqwest = ReqwestWrapper::new();
-            reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
-            RequestMaker::mock(reqwest)
         }
     }
 
@@ -317,18 +318,47 @@ test_suite! {
         }
     }
 
-    test get_match_ids_by_queue(match_ids_reqwest) {
+    fixture multiple_match_ids(request: Vec<GetMatchIdsByQueueRequest>, response_len: u8) -> () {
+        params {
+            vec![
+                (
+                    vec![GetMatchIdsByQueueRequest {
+                        queue_id: DataConstants::RankedConquest,
+                        date: Utc.ymd(2019, 8, 5),
+                        hour: String::from("0"),
+                        minute: String::from("00"),
+                    }],
+                    20
+                ),
+                (
+                    vec![
+                        GetMatchIdsByQueueRequest {
+                            queue_id: DataConstants::RankedConquest,
+                            date: Utc.ymd(2019, 8, 5),
+                            hour: String::from("0"),
+                            minute: String::from("00"),
+                        },
+                        GetMatchIdsByQueueRequest {
+                            queue_id: DataConstants::RankedConquest,
+                            date: Utc.ymd(2019, 8, 5),
+                            hour: String::from("0"),
+                            minute: String::from("00"),
+                        }
+                    ],
+                    40
+                )
+            ].into_iter()
+        }
+        setup(&mut self) {}
+    }
+
+    test get_match_ids_by_queue(match_ids_reqwest, multiple_match_ids) {
         let mut request_maker = match_ids_reqwest.val;
         let replies = request_maker
-            .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
-                queue_id: DataConstants::RankedConquest,
-                date: Utc.ymd(2019, 8, 5),
-                hour: String::from("0"),
-                minute: String::from("00"),
-            }])
+            .get_match_ids_by_queue((*multiple_match_ids.params.request).clone())
             .unwrap();
 
-        assert_eq!(replies[0], String::from("956598608"));
+        assert_eq!(replies.len(), *multiple_match_ids.params.response_len as usize);
     }
 
     test get_match_details() {
