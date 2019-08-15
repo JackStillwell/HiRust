@@ -363,15 +363,15 @@ test_suite! {
         assert_eq!(replies.len(), multiple_match_ids.val as usize);
     }
 
-    fixture num_ids(request_vec: Vec<String>, num_calls: u8) -> u8 {
+    fixture num_ids(request_vec: Vec<String>, num_calls: u8, response_len: usize) -> usize {
         params {
             vec![
-                (vec!["match_id"; 30].into_iter().map(|x| x.to_string()).collect(), 3),
-                (vec!["match_id"; 31].into_iter().map(|x| x.to_string()).collect(), 4),
+                (vec!["match_id"; 30].into_iter().map(|x| x.to_string()).collect(), 3, 30),
+                (vec!["match_id"; 31].into_iter().map(|x| x.to_string()).collect(), 4, 40),
             ].into_iter()
         }
         setup(&mut self) {
-            *self.num_calls
+            *self.response_len
         }
     }
 
@@ -380,13 +380,15 @@ test_suite! {
 
         // tests that 30 ids leads to 3 calls
         reqwest.expect_get_to_text()
-               .times(num_ids.val as usize)
+               .times(*num_ids.params.num_calls as usize)
                .returning(|_x| Ok(String::from(test_responses::GET_MATCH_DETAILS)));
 
         let request_maker = RequestMaker::mock(reqwest);
 
-        let _replies = request_maker
+        let replies = request_maker
             .get_match_details((*num_ids.params.request_vec).clone())
             .unwrap();
+
+        assert_eq!(replies.len(), num_ids.val);
     }
 }
