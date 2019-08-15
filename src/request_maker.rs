@@ -265,6 +265,13 @@ test_suite! {
     use chrono::TimeZone;
     use crate::test_responses;
 
+    test format_date_correct() {
+        let expected_string = String::from("20190810");
+        let date = Utc.ymd(2019, 8, 10);
+        let generated_string: String = format_date(date);
+        assert_eq!(generated_string, expected_string);
+    }
+
     test get_match_ids_by_queue() {
         let mut reqwest = ReqwestWrapper::new();
         reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
