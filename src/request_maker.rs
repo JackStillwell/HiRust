@@ -1,4 +1,5 @@
 use chrono::{Date, Datelike, Utc};
+use pbr::ProgressBar;
 use std::cmp;
 use std::fs::File;
 use std::io::Write;
@@ -13,7 +14,8 @@ use crate::url_builder;
 cfg_if::cfg_if! {
     if #[cfg(test)] {
         use galvanic_test::test_suite;
-        use crate::reqwest_wrapper::MockReqwestWrapper as ReqwestWrapper;
+        use crate::reqwest_wrapper::Wrapper;
+        use crate::reqwest_wrapper::MockWrapper as ReqwestWrapper;
     }
     else {
         use crate::reqwest_wrapper::ReqwestWrapper;
@@ -39,11 +41,12 @@ fn construct_batch_match_id_string(match_ids: Vec<String>) -> String {
     ret_string
 }
 
+#[derive(Debug, Clone)]
 pub struct GetMatchIdsByQueueRequest {
-    queue_id: DataConstants,
-    date: Date<Utc>,
-    hour: String,
-    minute: String,
+    pub queue_id: DataConstants,
+    pub date: Date<Utc>,
+    pub hour: String,
+    pub minute: String,
 }
 
 pub struct RequestMaker {
@@ -196,6 +199,7 @@ impl RequestMaker {
         let mut handles = vec![];
         let arc_endpoint = Arc::new(endpoint);
         let responses = Arc::new(Mutex::new(Vec::new()));
+        let mut pb = ProgressBar::new(url_optionals.len() as u64);
         for url_optional in url_optionals {
             let session_manager = Arc::clone(&self.session_manager);
             let reqwest = Arc::clone(&self.reqwest);
@@ -244,7 +248,10 @@ impl RequestMaker {
 
         for handle in handles {
             handle.join().unwrap();
+            pb.inc();
         }
+
+        pb.finish();
 
         let to_ret = (*responses.lock().unwrap()).clone();
 
@@ -259,31 +266,129 @@ test_suite! {
     use chrono::TimeZone;
     use crate::test_responses;
 
-    test get_match_ids_by_queue() {
-        let mut reqwest = ReqwestWrapper::new();
-        reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
-        let mut request_maker = RequestMaker::mock(reqwest);
+    test format_date_correct() {
+        let expected_string = String::from("20190810");
+        let date = Utc.ymd(2019, 8, 10);
+        let generated_string: String = format_date(date);
+        assert_eq!(generated_string, expected_string);
+    }
+
+    test construct_batch_match_id_string_correct() {
+        let match_ids: Vec<String> = vec!["1", "2", "3"].into_iter().map(|x| x.to_string()).collect();
+        let expected_string = String::from("/1,2,3");
+        assert_eq!(expected_string, construct_batch_match_id_string(match_ids));
+    }
+
+    fixture match_ids_reqwest() -> RequestMaker {
+        setup(&mut self) {
+            let mut reqwest = ReqwestWrapper::new();
+            reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_IDS_BY_QUEUE)));
+            RequestMaker::mock(reqwest)
+        }
+    }
+
+    fixture time_combos(hour: String, minute: String, response: String) -> String {
+        params {
+            vec![
+                (String::from("0"),String::from("00"), String::from("956598608")),
+                (String::from("-1"),String::from(""), String::from("956598608")),
+                (String::from("-1"),String::from("20"), String::from("Invalid combination of hour and minute")),
+                (String::from("-2"),String::from("20"), String::from("Invalid hour specified")),
+                (String::from("0"),String::from("23"), String::from("Invalid minute specified")),
+            ].into_iter()
+        }
+        setup(&mut self) {
+            String::from(self.response)
+        }
+    }
+
+    test get_match_ids_by_queue_valid_time(time_combos, match_ids_reqwest) {
+        let mut request_maker = match_ids_reqwest.val;
         let replies = request_maker
             .get_match_ids_by_queue(vec![GetMatchIdsByQueueRequest {
                 queue_id: DataConstants::RankedConquest,
                 date: Utc.ymd(2019, 8, 5),
-                hour: String::from("0"),
-                minute: String::from("00"),
-            }])
-            .unwrap();
+                hour: String::from(time_combos.params.hour),
+                minute: String::from(time_combos.params.minute),
+            }]);
 
-        assert_eq!(replies[0], String::from("956598608"));
+        match replies {
+            Ok(response) => assert_eq!(response[0], time_combos.val),
+            Err(response) => assert_eq!(response, time_combos.val)
+        }
     }
 
-    test get_match_details() {
+    fixture multiple_match_ids(request: Vec<GetMatchIdsByQueueRequest>, response_len: u8) -> u8 {
+        params {
+            vec![
+                (
+                    vec![GetMatchIdsByQueueRequest {
+                        queue_id: DataConstants::RankedConquest,
+                        date: Utc.ymd(2019, 8, 5),
+                        hour: String::from("0"),
+                        minute: String::from("00"),
+                    }],
+                    20
+                ),
+                (
+                    vec![
+                        GetMatchIdsByQueueRequest {
+                            queue_id: DataConstants::RankedConquest,
+                            date: Utc.ymd(2019, 8, 5),
+                            hour: String::from("0"),
+                            minute: String::from("00"),
+                        },
+                        GetMatchIdsByQueueRequest {
+                            queue_id: DataConstants::RankedConquest,
+                            date: Utc.ymd(2019, 8, 5),
+                            hour: String::from("0"),
+                            minute: String::from("00"),
+                        }
+                    ],
+                    40
+                )
+            ].into_iter()
+        }
+        setup(&mut self) {
+            *self.response_len
+        }
+    }
+
+    test get_match_ids_by_queue(match_ids_reqwest, multiple_match_ids) {
+        let mut request_maker = match_ids_reqwest.val;
+        let replies = request_maker
+            .get_match_ids_by_queue((*multiple_match_ids.params.request).clone())
+            .unwrap();
+
+        assert_eq!(replies.len(), multiple_match_ids.val as usize);
+    }
+
+    fixture num_ids(request_vec: Vec<String>, num_calls: u8, response_len: usize) -> usize {
+        params {
+            vec![
+                (vec!["match_id"; 30].into_iter().map(|x| x.to_string()).collect(), 3, 30),
+                (vec!["match_id"; 31].into_iter().map(|x| x.to_string()).collect(), 4, 40),
+            ].into_iter()
+        }
+        setup(&mut self) {
+            *self.response_len
+        }
+    }
+
+    test get_match_details_multiple_ids(num_ids) {
         let mut reqwest = ReqwestWrapper::new();
-        reqwest.expect_get_to_text().returning(|_x| Ok(String::from(test_responses::GET_MATCH_DETAILS)));
+
+        // tests that 30 ids leads to 3 calls
+        reqwest.expect_get_to_text()
+               .times(*num_ids.params.num_calls as usize)
+               .returning(|_x| Ok(String::from(test_responses::GET_MATCH_DETAILS)));
+
         let request_maker = RequestMaker::mock(reqwest);
 
         let replies = request_maker
-            .get_match_details(vec![String::from("956598608")])
+            .get_match_details((*num_ids.params.request_vec).clone())
             .unwrap();
 
-        assert_eq!(replies[0].playerId, Some(String::from("4203198")));
+        assert_eq!(replies.len(), num_ids.val);
     }
 }

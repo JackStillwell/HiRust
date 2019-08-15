@@ -1,9 +1,36 @@
-use mockall::*;
+cfg_if::cfg_if! {
+    if #[cfg(test)] {
+        use mockall::*;
+        use MockReqwest as reqwest;
+        use MockReqwestResponse as Response;
+        use galvanic_test::test_suite;
+
+        #[automock]
+        trait Reqwest {
+            fn get(url: &str) -> Result<Response, String>;
+        }
+
+        #[automock]
+        trait ReqwestResponse {
+            fn text(&mut self) -> Result<String, String>;
+        }
+
+        #[automock]
+        pub trait Wrapper {
+            fn get_to_text(&self, url: String) -> Result<String, String>;
+        }
+    } else {
+        use reqwest;
+    }
+}
 
 pub struct ReqwestWrapper {}
 
-#[automock]
 impl ReqwestWrapper {
+    pub fn new() -> ReqwestWrapper {
+        ReqwestWrapper {}
+    }
+
     pub fn get_to_text(&self, url: String) -> Result<String, String> {
         let mut error_messages: Vec<String> = Vec::new();
         let mut ret_text: String = String::new();
@@ -35,7 +62,43 @@ impl ReqwestWrapper {
                 let msg: String = format!(" {} |", error);
                 error_string.push_str(&msg);
             }
-            return Err(error_string);
+            let str_len = error_string.len();
+            let substring = &error_string[1..(str_len - 2)];
+            return Err(String::from(substring));
         }
+    }
+}
+
+#[cfg(test)]
+test_suite! {
+    name test_reqwest_wrapper;
+    use super::*;
+
+    fixture configure_mock_reqwest() -> () {
+        setup(&mut self) {
+            reqwest::expect_get().returning(|x|
+                if x == String::from("bad_url") {
+                    Err(String::from("Failure"))
+                } else {
+                    let mut mock_response = Response::new();
+                    mock_response.expect_text().return_const(Err(String::from("Failure")));
+                    Ok(mock_response)
+                }
+            );
+        }
+    }
+
+    test three_tries_fail_reqwest(configure_mock_reqwest) {
+        let reqwest_wrapper = ReqwestWrapper::new();
+        let results = reqwest_wrapper.get_to_text(String::from("bad_url"));
+        let failure_string = "Error reqwesting url: Failure | Error reqwesting url: Failure | Error reqwesting url: Failure";
+        assert_eq!(results, Err(String::from(failure_string)));
+    }
+
+    test three_tries_fail_response_text(configure_mock_reqwest) {
+        let reqwest_wrapper = ReqwestWrapper::new();
+        let results = reqwest_wrapper.get_to_text(String::from("bad_response"));
+        let failure_string = "Error decoding response: Failure | Error decoding response: Failure | Error decoding response: Failure";
+        assert_eq!(results, Err(String::from(failure_string)));
     }
 }

@@ -14,10 +14,12 @@ use crate::hi_rez_constants::{LimitConstants, ReturnDataType, UrlConstants};
 use crate::models::CreateSessionReply;
 use crate::url_builder;
 
-cfg_if::cfg_if! { 
+cfg_if::cfg_if! {
     if #[cfg(test)] {
-        use crate::reqwest_wrapper::MockReqwestWrapper as ReqwestWrapper;
         use galvanic_test::test_suite;
+        use crate::reqwest_wrapper::Wrapper;
+        use crate::reqwest_wrapper::MockWrapper as ReqwestWrapper;
+
     } else {
         use crate::reqwest_wrapper::ReqwestWrapper;
     }
@@ -68,6 +70,7 @@ pub struct SessionManager {
     pub base_url: UrlConstants,
 }
 
+#[cfg(not(test))]
 impl Drop for SessionManager {
     fn drop(&mut self) {
         self.store();
