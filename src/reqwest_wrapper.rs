@@ -74,21 +74,28 @@ test_suite! {
     name test_reqwest_wrapper;
     use super::*;
 
-    test three_tries_fail_reqwest() {
-        reqwest::expect_get().returning(|x|
-            if x == String::from("bad_url") {
-                Err(String::from("Failure"))
-            } else {
-                Ok(Response::new().expect_text().return_const(Err(String::from("bad response"))))
-            }
-        );
+    fixture configure_mock_reqwest() -> () {
+        setup(&mut self) {
+            reqwest::expect_get().returning(|x|
+                if x == String::from("bad_url") {
+                    Err(String::from("Failure"))
+                } else {
+                    let mut mock_response = Response::new();
+                    mock_response.expect_text().return_const(Err(String::from("Failure")));
+                    Ok(mock_response)
+                }
+            );
+        }
+    }
+
+    test three_tries_fail_reqwest(configure_mock_reqwest) {
         let reqwest_wrapper = ReqwestWrapper::new();
         let results = reqwest_wrapper.get_to_text(String::from("bad_url"));
         let failure_string = "Error reqwesting url: Failure | Error reqwesting url: Failure | Error reqwesting url: Failure";
         assert_eq!(results, Err(String::from(failure_string)));
     }
 
-    test three_tries_fail_response_text() {
+    test three_tries_fail_response_text(configure_mock_reqwest) {
         let reqwest_wrapper = ReqwestWrapper::new();
         let results = reqwest_wrapper.get_to_text(String::from("bad_response"));
         let failure_string = "Error decoding response: Failure | Error decoding response: Failure | Error decoding response: Failure";
