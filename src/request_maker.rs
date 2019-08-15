@@ -318,7 +318,7 @@ test_suite! {
         }
     }
 
-    fixture multiple_match_ids(request: Vec<GetMatchIdsByQueueRequest>, response_len: u8) -> () {
+    fixture multiple_match_ids(request: Vec<GetMatchIdsByQueueRequest>, response_len: u8) -> u8 {
         params {
             vec![
                 (
@@ -349,7 +349,9 @@ test_suite! {
                 )
             ].into_iter()
         }
-        setup(&mut self) {}
+        setup(&mut self) {
+            *self.response_len
+        }
     }
 
     test get_match_ids_by_queue(match_ids_reqwest, multiple_match_ids) {
@@ -358,7 +360,7 @@ test_suite! {
             .get_match_ids_by_queue((*multiple_match_ids.params.request).clone())
             .unwrap();
 
-        assert_eq!(replies.len(), *multiple_match_ids.params.response_len as usize);
+        assert_eq!(replies.len(), multiple_match_ids.val as usize);
     }
 
     test get_match_details() {
