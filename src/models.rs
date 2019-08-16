@@ -156,6 +156,20 @@ pub struct PlayerMatchDetails {
     pub ret_msg: Option<String>,
 }
 
+#[allow(non_snake_case)]
+#[derive(Deserialize)]
+pub struct God {
+    pub id: u16,
+    pub Name: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Deserialize)]
+pub struct Item {
+    ItemId: u16,
+    DeviceName: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
