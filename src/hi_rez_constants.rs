@@ -41,12 +41,14 @@ impl ReturnDataType {
 #[derive(Debug, Clone)]
 pub enum DataConstants {
     RankedConquest,
+    RankedJoust,
 }
 
 impl DataConstants {
     pub fn val(&self) -> String {
         match *self {
             DataConstants::RankedConquest => String::from("451"),
+            DataConstants::RankedJoust => String::from("450"),
         }
     }
 }
