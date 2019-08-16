@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
 
 use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
 use crate::models::{GetMatchIdsByQueueReply, PlayerMatchDetails};
@@ -195,22 +194,32 @@ impl RequestMaker {
     pub fn concurrent_reqwest(
         &self,
         endpoint: UrlConstants,
-        url_optionals: Vec<String>,
+        mut url_optionals: Vec<String>,
     ) -> Vec<String> {
-        let mut handles = vec![];
         let arc_endpoint = Arc::new(endpoint);
         let responses = Arc::new(Mutex::new(Vec::new()));
         let mut pb = ProgressBar::new(url_optionals.len() as u64);
-        for url_optional in url_optionals {
-            loop {
-                let url_optional = url_optional.clone();
+
+        let num_requests: f32 = url_optionals.len() as f32;
+        let num_groups_needed: f32 = num_requests / 45_f32;
+        let num_groups_needed: usize = num_groups_needed.ceil() as usize;
+
+        let mut request_groups = vec![];
+        for _ in 0..num_groups_needed {
+            let limit = cmp::min(url_optionals.len(), 45);
+            let urls: Vec<String> = url_optionals.drain(..limit).collect();
+            request_groups.push(urls);
+        }
+
+        for request_group in request_groups {
+            let mut handles = vec![];
+            for url_optional in request_group {
                 let session_manager = Arc::clone(&self.session_manager);
                 let reqwest = Arc::clone(&self.reqwest);
                 let endpoint = Arc::clone(&arc_endpoint);
                 let responses = Arc::clone(&responses);
 
-                let builder = std::thread::Builder::new();
-                let handle = builder.spawn(move || {
+                let handle = thread::spawn(move || {
                     let mut response_text: String;
                     loop {
                         let session_key = match session_manager.get_session_key_concurrent() {
@@ -248,26 +257,17 @@ impl RequestMaker {
 
                     responses.lock().unwrap().push(response_text);
                 });
+                handles.push(handle);
+            }
 
-                match handle {
-                    Ok(handle) =>  {
-                        handles.push(handle);
-                        break;
-                    },
-                    Err(_) => thread::sleep(Duration::from_secs(1 as u64)),
-                }
+            for handle in handles {
+                handle.join().unwrap();
+                pb.inc();
             }
         }
 
-        for handle in handles {
-            handle.join().unwrap();
-            pb.inc();
-        }
-
         pb.finish();
-
         let to_ret = (*responses.lock().unwrap()).clone();
-
         to_ret
     }
 }
