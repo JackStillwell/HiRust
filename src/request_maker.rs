@@ -191,7 +191,7 @@ impl RequestMaker {
         Ok(replies)
     }
 
-    fn concurrent_reqwest(
+    pub fn concurrent_reqwest(
         &self,
         endpoint: UrlConstants,
         url_optionals: Vec<String>,
