@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use crate::hi_rez_constants::{DataConstants, ReturnDataType, UrlConstants};
 use crate::models::{GetMatchIdsByQueueReply, PlayerMatchDetails};
@@ -201,49 +202,61 @@ impl RequestMaker {
         let responses = Arc::new(Mutex::new(Vec::new()));
         let mut pb = ProgressBar::new(url_optionals.len() as u64);
         for url_optional in url_optionals {
-            let session_manager = Arc::clone(&self.session_manager);
-            let reqwest = Arc::clone(&self.reqwest);
-            let endpoint = Arc::clone(&arc_endpoint);
-            let responses = Arc::clone(&responses);
-            let handle = thread::spawn(move || {
-                let mut response_text: String;
-                loop {
-                    let session_key = match session_manager.get_session_key_concurrent() {
-                        Ok(key) => key,
-                        Err(msg) => {
-                            println!("{}", msg);
-                            return;
-                        }
-                    };
-                    let url = url_builder::url(
-                        &session_manager.credentials.dev_id,
-                        &session_manager.credentials.dev_key,
-                        &String::from(session_key.clone()),
-                        &session_manager.base_url,
-                        &(*endpoint),
-                        &ReturnDataType::Json,
-                        &url_optional,
-                    );
+            loop {
+                let url_optional = url_optional.clone();
+                let session_manager = Arc::clone(&self.session_manager);
+                let reqwest = Arc::clone(&self.reqwest);
+                let endpoint = Arc::clone(&arc_endpoint);
+                let responses = Arc::clone(&responses);
 
-                    response_text = match reqwest.get_to_text(url) {
-                        Ok(text) => text,
-                        Err(msg) => {
-                            println!("{}", msg);
-                            return;
-                        }
-                    };
+                let builder = std::thread::Builder::new();
+                let handle = builder.spawn(move || {
+                    let mut response_text: String;
+                    loop {
+                        let session_key = match session_manager.get_session_key_concurrent() {
+                            Ok(key) => key,
+                            Err(msg) => {
+                                println!("{}", msg);
+                                return;
+                            }
+                        };
+                        let url = url_builder::url(
+                            &session_manager.credentials.dev_id,
+                            &session_manager.credentials.dev_key,
+                            &String::from(session_key.clone()),
+                            &session_manager.base_url,
+                            &(*endpoint),
+                            &ReturnDataType::Json,
+                            &url_optional,
+                        );
 
-                    if response_text.contains("Invalid session id") {
-                        session_manager.remove_invalid_session(session_key);
-                    } else {
-                        session_manager.replace_session(session_key);
-                        break;
+                        response_text = match reqwest.get_to_text(url) {
+                            Ok(text) => text,
+                            Err(msg) => {
+                                println!("{}", msg);
+                                return;
+                            }
+                        };
+
+                        if response_text.contains("Invalid session id") {
+                            session_manager.remove_invalid_session(session_key);
+                        } else {
+                            session_manager.replace_session(session_key);
+                            break;
+                        }
                     }
-                }
 
-                responses.lock().unwrap().push(response_text);
-            });
-            handles.push(handle);
+                    responses.lock().unwrap().push(response_text);
+                });
+
+                match handle {
+                    Ok(handle) =>  {
+                        handles.push(handle);
+                        break;
+                    },
+                    Err(_) => thread::sleep(Duration::from_secs(1 as u64)),
+                }
+            }
         }
 
         for handle in handles {
