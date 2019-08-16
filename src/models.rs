@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct CreateSessionReply {
@@ -157,17 +157,17 @@ pub struct PlayerMatchDetails {
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct God {
     pub id: u16,
     pub Name: String,
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Item {
-    ItemId: u16,
-    DeviceName: String,
+    pub ItemId: u16,
+    pub DeviceName: String,
 }
 
 #[cfg(test)]
