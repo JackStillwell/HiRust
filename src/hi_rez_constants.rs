@@ -51,6 +51,16 @@ impl DataConstants {
             DataConstants::RankedJoust => String::from("450"),
         }
     }
+
+    pub fn from_str(constant_str: String) -> Result<DataConstants, String> {
+        if &constant_str == "RankedConquest" {
+            return Ok(DataConstants::RankedConquest);
+        } else if &constant_str == "RankedJoust" {
+            return Ok(DataConstants::RankedJoust);
+        } else {
+            return Err(format!("DataConstant match not found for: {}", constant_str));
+        }
+    }
 }
 
 pub enum LimitConstants {
