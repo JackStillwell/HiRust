@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CreateSessionReply {
     pub ret_msg: Option<String>,
     pub session_id: Option<String>,
@@ -8,7 +8,7 @@ pub struct CreateSessionReply {
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GetMatchIdsByQueueReply {
     pub ret_msg: Option<String>,
     pub Active_Flag: Option<char>,
@@ -16,7 +16,7 @@ pub struct GetMatchIdsByQueueReply {
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct MergedPlayer {
     pub merge_datetime: String,
     pub playerId: String,
@@ -24,7 +24,7 @@ pub struct MergedPlayer {
 }
 
 #[allow(non_snake_case)]
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PlayerMatchDetails {
     pub Account_Level: Option<u8>,
     pub ActiveId1: Option<u16>,
@@ -157,14 +157,14 @@ pub struct PlayerMatchDetails {
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct God {
     pub id: u16,
     pub Name: String,
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Item {
     pub ItemId: u16,
     pub DeviceName: String,
