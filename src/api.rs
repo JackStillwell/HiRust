@@ -36,7 +36,7 @@ impl SmiteAPI {
     pub fn get_match_details(
         &self,
         match_ids: Vec<String>,
-    ) -> Result<Vec<PlayerMatchDetails>, String> {
+    ) -> Result<Vec<Result<PlayerMatchDetails, String>>, String> {
         self.request_maker.get_match_details(match_ids)
     }
 
