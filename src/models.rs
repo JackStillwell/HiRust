@@ -24,7 +24,7 @@ pub struct MergedPlayer {
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct PlayerMatchDetails {
     pub Account_Level: Option<u8>,
     pub ActiveId1: Option<u16>,
