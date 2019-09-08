@@ -214,7 +214,7 @@ pub struct God {
     pub MagicProtectionPerLevel: Option<f32>,
     pub MagicalPower: Option<u8>,
     pub MagicalPowerPerLevel: Option<f32>,
-    pub Mana: Option<u8>,
+    pub Mana: Option<u16>,
     pub ManaPerFive: Option<f32>,
     pub ManaPerLevel: Option<u8>,
     pub Name: Option<String>,
