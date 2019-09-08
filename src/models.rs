@@ -158,16 +158,95 @@ pub struct PlayerMatchDetails {
 
 #[allow(non_snake_case)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AbilityDescriptionValuePair {
+    pub description: Option<String>,
+    pub value: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ItemDescriptionValuePair {
+    pub Description: Option<String>,
+    pub Value: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AbilityItemDescription {
+    pub cooldown: Option<String>,
+    pub cost: Option<String>,
+    pub menuitems: Option<Vec<AbilityDescriptionValuePair>>,
+    pub rankitems: Option<Vec<AbilityDescriptionValuePair>>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GodAbilityDescription {
+    pub itemDescription: Option<AbilityItemDescription>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GodAbility {
+    pub Description: Option<GodAbilityDescription>,
+    pub Id: Option<u16>,
+    pub Summary: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct God {
-    pub id: u16,
-    pub Name: String,
+    pub Ability_1: Option<GodAbility>,
+    pub Ability_2: Option<GodAbility>,
+    pub Ability_3: Option<GodAbility>,
+    pub Ability_4: Option<GodAbility>,
+    pub Ability_5: Option<GodAbility>,
+    pub basicAttack: Option<ItemDescription>,
+    pub AttackSpeed: Option<f32>,
+    pub AttackSpeedPerLevel: Option<f32>,
+    pub Cons: Option<String>,
+    pub HP5PerLevel: Option<f32>,
+    pub Health: Option<u16>,
+    pub HealthPerFive: Option<u8>,
+    pub HealthPerLevel: Option<u8>,
+    pub MP5PerLevel: Option<f32>,
+    pub MagicProtection: Option<u8>,
+    pub MagicProtectionPerLevel: Option<f32>,
+    pub MagicalPower: Option<u8>,
+    pub MagicalPowerPerLevel: Option<u8>,
+    pub Mana: Option<u8>,
+    pub ManaPerFive: Option<f32>,
+    pub ManaPerLevel: Option<u8>,
+    pub Name: Option<String>,
+    pub PhysicalPower: Option<u8>,
+    pub PhysicalPowerPerLevel: Option<u8>,
+    pub PhysicalProtection: Option<u8>,
+    pub PhysicalProtectionPerLevel: Option<u8>,
+    pub Pros: Option<String>,
+    pub Roles: Option<String>,
+    pub Speed: Option<u16>,
+    pub Type: Option<String>,
+    pub id: Option<u16>,
+    pub ret_msg: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ItemDescription {
+    pub Description: Option<String>,
+    pub MenuItems: Option<Vec<ItemDescriptionValuePair>>,
 }
 
 #[allow(non_snake_case)]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Item {
-    pub ItemId: u16,
     pub DeviceName: String,
+    pub ItemId: Option<u16>,
+    pub ItemTier: Option<u8>,
+    pub Price: Option<u16>,
+    pub RestrictedRoles: Option<String>,
+    pub Type: Option<String>,
+    pub ret_msg: Option<String>,
 }
 
 #[cfg(test)]
