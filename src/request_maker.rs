@@ -183,10 +183,15 @@ impl RequestMaker {
             replies.append(&mut reply);
         }
 
-        match &replies[0].ret_msg {
-            Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
-            None => {}
-        };
+        // allow the response to be empty
+        // this may happen because too many matches were played in the q that day
+        // should probably update this to detect that and get it hourly
+        if replies.len() > 0 {
+            match &replies[0].ret_msg {
+                Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                None => {}
+            };
+        }
 
         Ok(replies)
     }
