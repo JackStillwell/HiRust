@@ -153,7 +153,7 @@ impl RequestMaker {
     pub fn get_match_details(
         &self,
         mut match_ids: Vec<String>,
-    ) -> Result<Vec<PlayerMatchDetails>, String> {
+    ) -> Result<Vec<Result<PlayerMatchDetails, String>>, String> {
         let match_ids_len: f32 = match_ids.len() as f32;
         let num_urls_needed: f32 = match_ids_len / 10_f32;
         let num_urls_needed: usize = num_urls_needed.ceil() as usize;
@@ -167,31 +167,30 @@ impl RequestMaker {
 
         let responses = self.concurrent_reqwest(UrlConstants::GetMatchDetailsBatch, id_strings);
 
-        let mut replies: Vec<PlayerMatchDetails> = Vec::new();
+        let mut replies: Vec<Result<PlayerMatchDetails, String>> = Vec::new();
         for response in responses {
             let mut reply: Vec<PlayerMatchDetails> = match serde_json::from_str(&response) {
                 Ok(json) => json,
                 Err(msg) => {
                     let mut file = File::create("debug_dump.json").unwrap();
                     file.write_all(response.as_bytes()).unwrap();
-                    return Err(format!(
+                    replies.push(Err(format!(
                         "Error deserializing get match details batch reply: {}",
                         msg
-                    ));
+                    )));
+                    continue;
                 }
             };
-            replies.append(&mut reply);
+            replies.append(&mut reply.into_iter().map(|x| Ok(x)).collect());
         }
 
-        // allow the response to be empty
-        // this may happen because too many matches were played in the q that day
-        // should probably update this to detect that and get it hourly
-        if replies.len() > 0 {
-            match &replies[0].ret_msg {
+        match &replies[0] {
+            Ok(reply) => match &reply.ret_msg {
                 Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
                 None => {}
-            };
-        }
+            },
+            Err(_) => {},
+        };
 
         Ok(replies)
     }
