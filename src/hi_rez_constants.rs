@@ -42,6 +42,7 @@ impl ReturnDataType {
 pub enum DataConstants {
     RankedConquest,
     RankedJoust,
+    RankedDuel,
 }
 
 impl DataConstants {
@@ -49,6 +50,7 @@ impl DataConstants {
         match *self {
             DataConstants::RankedConquest => String::from("451"),
             DataConstants::RankedJoust => String::from("450"),
+            DataConstants::RankedDuel => String::from("440"),
         }
     }
 
@@ -57,8 +59,13 @@ impl DataConstants {
             return Ok(DataConstants::RankedConquest);
         } else if &constant_str == "RankedJoust" {
             return Ok(DataConstants::RankedJoust);
+        } else if &constant_str == "RankedDuel" {
+            return Ok(DataConstants::RankedDuel);
         } else {
-            return Err(format!("DataConstant match not found for: {}", constant_str));
+            return Err(format!(
+                "DataConstant match not found for: {}",
+                constant_str
+            ));
         }
     }
 }
