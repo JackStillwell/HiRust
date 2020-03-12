@@ -88,7 +88,7 @@ impl RequestMaker {
             let hour = request.hour;
             let minute = request.minute;
 
-            let mut time_window_to_retrieve: String;
+            let time_window_to_retrieve: String;
 
             match VALID_HOURS.iter().find(|&&x| x == hour) {
                 Some(_) => {}
@@ -183,10 +183,14 @@ impl RequestMaker {
             replies.append(&mut reply);
         }
 
-        match &replies[0].ret_msg {
-            Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
-            None => {}
-        };
+        if replies.len() > 0 {
+            match &replies[0].ret_msg {
+                Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                None => {}
+            };
+        } else {
+            return Err("No replies".to_string());
+        }
 
         Ok(replies)
     }
