@@ -197,7 +197,7 @@ impl RequestMaker {
                     Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
                     None => {}
                 },
-                Err(err) => return Err(format!("GetMatchDetails Request Error: {}", err)),
+                Err(err) => return Err(format!("Internal HiRust GetMatchDetails Error: {}", err)),
             };
         } else {
             return Err("No replies".to_string());
