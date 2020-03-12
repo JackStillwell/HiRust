@@ -192,9 +192,12 @@ impl RequestMaker {
         // this might happen if there were too many matches
         // should probably update to detect and request hourly
         if replies.len() > 0 {
-            match &replies[0].ret_msg {
-                Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
-                None => {}
+            match &replies[0] {
+                Ok(x) => match &x.ret_msg {
+                    Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                    None => {}
+                },
+                Err(err) => return Err(format!("GetMatchDetails Request Error: {}", err)),
             };
         } else {
             return Err("No replies".to_string());
