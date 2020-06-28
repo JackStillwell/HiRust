@@ -194,7 +194,10 @@ impl RequestMaker {
         if replies.len() > 0 {
             match &replies[0] {
                 Ok(x) => match &x.ret_msg {
-                    Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                    Some(msg) => match msg {
+                        "PLayer Privacy Flag set for this player." => {}
+                        _ => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                    },
                     None => {}
                 },
                 Err(err) => return Err(format!("Internal HiRust GetMatchDetails Error: {}", err)),
