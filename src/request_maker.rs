@@ -28,6 +28,8 @@ const VALID_HOURS: [&str; 25] = [
 ];
 const VALID_MINUTES: [&str; 7] = ["", "00", "10", "20", "30", "40", "50"];
 
+const VALID_RETURN_MESSAGES: [&str; 1] = ["Player Privacy Flag set for this player."];
+
 fn format_date(date: Date<Utc>) -> String {
     format!("{}{:02}{:02}", date.year(), date.month(), date.day(),)
 }
@@ -174,7 +176,7 @@ impl RequestMaker {
 
         let mut replies: Vec<Result<PlayerMatchDetails, String>> = Vec::new();
         for response in responses {
-            let mut reply: Vec<PlayerMatchDetails> = match serde_json::from_str(&response) {
+            let reply: Vec<PlayerMatchDetails> = match serde_json::from_str(&response) {
                 Ok(json) => json,
                 Err(msg) => {
                     let mut file = File::create("debug_dump.json").unwrap();
@@ -194,9 +196,9 @@ impl RequestMaker {
         if replies.len() > 0 {
             match &replies[0] {
                 Ok(x) => match &x.ret_msg {
-                    Some(msg) => match msg {
-                        "PLayer Privacy Flag set for this player." => {}
-                        _ => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                    Some(msg) => match VALID_RETURN_MESSAGES.contains(&msg.as_str()) {
+                        true => {}
+                        false => return Err(format!("GetMatchDetails Request Error: {}", msg)),
                     },
                     None => {}
                 },
