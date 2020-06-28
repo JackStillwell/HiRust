@@ -88,7 +88,7 @@ impl RequestMaker {
             let hour = request.hour;
             let minute = request.minute;
 
-            let mut time_window_to_retrieve: String;
+            let time_window_to_retrieve: String;
 
             match VALID_HOURS.iter().find(|&&x| x == hour) {
                 Some(_) => {}
@@ -189,17 +189,21 @@ impl RequestMaker {
             replies.append(&mut reply.into_iter().map(|x| Ok(x)).collect());
         }
 
-        // allow the response to be empty
-        // this may happen because too many matches were played in the q that day
-        // should probably update this to detect that and get it hourly
+        // this might happen if there were too many matches
+        // should probably update to detect and request hourly
         if replies.len() > 0 {
             match &replies[0] {
-                Ok(reply) => match &reply.ret_msg {
-                    Some(msg) => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                Ok(x) => match &x.ret_msg {
+                    Some(msg) => match msg {
+                        "PLayer Privacy Flag set for this player." => {}
+                        _ => return Err(format!("GetMatchDetails Request Error: {}", msg)),
+                    },
                     None => {}
                 },
-                Err(_) => {}
+                Err(err) => return Err(format!("Internal HiRust GetMatchDetails Error: {}", err)),
             };
+        } else {
+            return Err("No replies".to_string());
         }
 
         Ok(replies)
