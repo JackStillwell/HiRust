@@ -12,7 +12,7 @@ pub enum UrlConstants {
 impl UrlConstants {
     pub fn val(&self) -> String {
         match *self {
-            UrlConstants::UrlBase => String::from("http://api.smitegame.com/smiteapi.svc"),
+            UrlConstants::UrlBase => String::from("https://api.smitegame.com/smiteapi.svc"),
             UrlConstants::DataLimitCheck => String::from("getdataused"),
             UrlConstants::CreateSession => String::from("createsession"),
             UrlConstants::GetMatchDetails => String::from("getmatchdetails"),
